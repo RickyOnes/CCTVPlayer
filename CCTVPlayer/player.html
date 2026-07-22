@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
+#info{position:fixed;top:12px;left:12px;color:#aaa;font-size:12px;padding:8px 12px;background:rgba(0,0,0,.6);border-radius:4px;pointer-events:none;z-index:100}
+</style>
+</head>
+<body>
+<video id="v" autoplay playsinline></video>
+<div id="info">初始化...</div>
+
+<!-- ★★★ 域名锁破解: CMG wasm 数据段内嵌 EM_ASM 函数 theAnswer(),
+       通过 eval("self.location.host"/"self.location.protocol"/"self.location.href")
+       读取当前运行域名, 并与硬编码的 "yangshipin.cn" 校验。
+       我们的页面跑在 127.0.0.1:18888, 域名校验失败 → wasm 在 fetch CMGPlayer.json 之前
+       就 abort → 解密器保持恒等直通(same=Y)。
+     修复: 在任何 CMG 脚本加载前劫持全局 eval, 把 location 相关表达式伪装成 yangshipin.cn/https:。
+       (重写 window.eval 后, 生成代码里的 eval(name) 变为对我们函数的间接调用, 从而生效。)
+     同时记录所有 eval 字符串前 80 字符, 便于确认 wasm 到底 eval 了什么。 -->
+<!-- ★★★ 域名锁破解 (v2 鲁棒版):
+     wasm 的 theAnswer() 通过 eval(name) 读取 location 并校验域名。
+     旧版只匹配"单一属性"表达式(如 self.location.host), 但 wasm 常拼接复合表达式
+     (如 self.location.protocol+"//"+self.location.host), 旧版漏匹配 → 返回真实 127.0.0.1 →
+     域名校验失败 → wasm 不抓 CMGPlayer.json → 解密恒等(same=Y) → 花屏。
+     新版: 对任何含 "location" 的 eval 表达式, 用伪 location 对象求值,
+     使所有 location 读取(含复合拼接)都返回 yangshipin.cn/https:。 -->
+<script>
+(function(){
+  var _eval = window.eval;
+  // 伪 location: 让任何 location 表达式(含复合拼接)都返回 yangshipin.cn
+  var fakeLoc = {
+    host:'yangshipin.cn', hostname:'yangshipin.cn', protocol:'https:',
+    href:'https://yangshipin.cn/tv/home?pid=600001859',
+    origin:'https://yangshipin.cn', port:'',
+    pathname:'/tv/home', search:'?pid=600001859', hash:''
+  };
+  var _n = 0, _na = 0;
+  window.eval = function(s){
+    // ★ 诊断: 记录 wasm .eval 的所有表达式(含非 location), 上限 300 条 (已静默)
+    if (typeof s === 'string') {
+      try { if (_na < 300) { _na++; /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-ALL] '+s.substring(0,140)}); */ } } catch(e){}
+    }
+    if (typeof s === 'string' && /location/.test(s)) {
+      try {
+        // 用伪 location 在隔离作用域里求值, 覆盖 self/window/document/location 四种写法
+        var fn = new Function('self','window','document','location','navigator','return (' + s + ');');
+        var r = fn({location:fakeLoc}, {location:fakeLoc}, {location:fakeLoc}, fakeLoc, {});
+        if (typeof r === 'string') {
+          // if (_n < 80) { _n++; try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF] '+s.substring(0,90)+' -> '+r}); } catch(e){} }
+          return r;
+        }
+        // 非字符串结果: 强行用伪 location 重新拼一个字符串返回, 避免退回真实 eval 泄露 127.0.0.1
+        try { var r2 = String(r); /* if (_n < 80) { _n++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF-nonstr] '+s.substring(0,90)+' -> '+r2}); } */ return r2; } catch(e3){}
+      } catch(e) {
+        // try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'[EVAL] 复合求值失败: '+s.substring(0,80)+' :: '+e.message}); } catch(e2){}
+      }
+    }
+    return _eval.call(this, s);
+  };
+  try { /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL] 域名锁 eval 劫持(鲁棒版)已安装'}); */ } catch(e){}
+})();
+</script>
+
+<!-- ★★★ 主线程 location 伪装 (覆盖派发器 fG[0x909] 的直读 self.location.href)
+     cmg.worker.js 作为主线程脚本加载, wasm 与派发器共享 self(=window)。
+     派发器 InitPlayer 分支直接读 self.location.href(不走 eval, 故 WEVAL 劫持覆盖不到),
+     把它拼成 URL 存进 self 全局, wasm 再读该全局作密钥种子。
+     主线程真实 href=http://127.0.0.1:18888/player → 种子错误 → 空密钥表 → 解密恒等(same=Y)。
+     此处把主线程 self.location 伪装成 yangshipin.cn, 使派发器拼出的 URL 正确。 -->
+<script>
+(function(){
+  var FAKE_HREF='https://yangshipin.cn/tv/home?pid=600001859';
+  var realHref=(window.location&&window.location.href)||'(未知)';
+  var fakeLoc={
+    href:FAKE_HREF, protocol:'https:', host:'yangshipin.cn', hostname:'yangshipin.cn',
+    port:'', pathname:'/tv/home', search:'?pid=600001859', hash:'',
+    origin:'https://yangshipin.cn',
+    assign:function(){}, replace:function(){}, reload:function(){},
+    toString:function(){return FAKE_HREF;}
+  };
+  var steps=[];
+  // 1) 在 window 实例上定义自有 location 属性 (Chromium 中 window.location 通常不可配置 → 会失败, 仅作尝试)
+  try{ Object.defineProperty(window,'location',{value:fakeLoc,configurable:true,writable:false}); steps.push('win-loc:ok'); }catch(e){ steps.push('win-loc:FAIL'); }
+  try{ Object.defineProperty(self,'location',{value:fakeLoc,configurable:true,writable:false}); steps.push('self-loc:ok'); }catch(e){ steps.push('self-loc:FAIL'); }
+  // 2) 改写 Location.prototype 的各 getter (直接用全局 Location 构造函数, 比 getPrototypeOf 可靠)
+  try{
+    var LP=(typeof Location!=='undefined')?Location.prototype:Object.getPrototypeOf(window.location);
+    [['href',FAKE_HREF],['host','yangshipin.cn'],['hostname','yangshipin.cn'],['protocol','https:'],['origin','https://yangshipin.cn'],['pathname','/tv/home'],['search','?pid=600001859']].forEach(function(p){
+      try{ Object.defineProperty(LP,p[0],{get:function(){return p[1];},configurable:true}); steps.push('proto-'+p[0]+':ok'); }catch(e){ steps.push('proto-'+p[0]+':FAIL'); }
+    });
+  }catch(e){ steps.push('proto:FAIL:'+e.message); }
+  // 3) 终极兜底: 改写 Window.prototype.location getter 直接返回 fakeLoc (影响 self.location 取值)
+  try{
+    var WP=Object.getPrototypeOf(window);
+    Object.defineProperty(WP,'location',{get:function(){return fakeLoc;},configurable:true});
+    steps.push('winproto-loc:ok');
+  }catch(e){ steps.push('winproto-loc:FAIL'); }
+  // 4) 预置 activeURL: 派发器会 self['activeURL']=self['activeURL'].replace(...), 若未定义会抛错被吞 → 密钥不加载
+  try{ Object.defineProperty(window,'activeURL',{value:FAKE_HREF,configurable:true}); }catch(e){}
+  try{ Object.defineProperty(self,'activeURL',{value:FAKE_HREF,configurable:true}); }catch(e){}
+  try{ Object.defineProperty(document,'URL',{value:FAKE_HREF,configurable:true}); }catch(e){}
+  // 5) 生效验证: 必须回读确认 self.location.href 真的变成 FAKE, 不再假成功
+  var nowHref=(self.location&&self.location.href)||'(null)';
+  var verified=(nowHref===FAKE_HREF);
+  // if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[LOC-SPOOF] steps=['+steps.join(',')+'] verified='+verified+' now='+nowHref});
+})();
+</script>
+
+<!-- ★★★ 网络层拦截 (必须在 cmg.worker.js / hls.cmg.js 之前安装, 让 emscripten 捕获到被劫持的 fetch)
+     ★★ 关键修复(2026-07-15): 之前只代理 cctv.cn/yangshipin.cn, 但 get_live_info 返回的 m3u8/TS
+     URL 指向 CDN 域名(waxen.cn 等), 不在列表中 → 直连 → 切换频道时 "no EXT3U delimiter"。
+     改为代理所有外部 HTTP(S) URL, 确保 m3u8/TS/KEY 全部走 Go 代理(自带 Referer/TLS 指纹)。 -->
+<script>
+(function(){
+  var PROXY='http://127.0.0.1:18888/media?u=';
+  function rewrite(url){
+    if(!url) return url;
+    // ★ 任何含 CMGPlayer.json 的请求都路由到本地配置 (容忍 wasm 拼出的畸形 URL / 127.0.0.1 本地路径)
+    if(/CMGPlayer\.json/i.test(url)) return '/Library/CMGPlayer.json';
+    if(url.indexOf('127.0.0.1')>=0||url.indexOf('localhost')>=0) return url;
+    // ★ 代理所有外部 HTTP(S) URL (CDN m3u8/TS/解密 key 全部走 Go 代理)
+    if(/^https?:\/\//i.test(url)) return PROXY+encodeURIComponent(url);
+    return url;
+  }
+  var _fetch=window.fetch?window.fetch.bind(window):null;
+  if(_fetch){ window.fetch=function(input,init){
+    var u=(typeof input==='string')?input:(input&&input.url?input.url:null);
+    // try{ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[net-RAW] fetch '+(typeof input==='string'?input:(input&&input.url?input.url:'?')).substring(0,140)}); }catch(e){}
+    var ru=rewrite(u);
+    if(ru!==u){
+      // try{ window.chrome.webview.postMessage({log:'[net] fetch→proxy '+String(u).substring(0,90)}); }catch(e){}
+      if(typeof input!=='string'&&input){ try{ input=new Request(ru,input); }catch(e){ input=ru; } } else input=ru;
+    }
+    return _fetch(input,init);
+  };}
+  var _open=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(){
+    if(arguments.length>=2){
+      // try{ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[net-RAW] xhr '+(arguments[0]||'GET')+' '+String(arguments[1]).substring(0,140)}); }catch(e){}
+      var ru=rewrite(arguments[1]);
+      if(ru!==arguments[1]){
+        // try{ window.chrome.webview.postMessage({log:'[net] xhr→proxy '+String(arguments[1]).substring(0,90)}); }catch(e){}
+        arguments[1]=ru;
+      }
+    }
+    return _open.apply(this,arguments);
+  };
+  /* try{ window.chrome.webview.postMessage({log:'[net] 网络拦截已安装 (cctv/yangshipin → /media)'}); }catch(e){} */
+})();
+</script>
+
+<!-- CMG 解密播放器 (经本地代理 /sapi 同源加载, 避免跨域 Worker 限制) -->
+<script src="/sapi/assets/2025/wasm/cmg.worker.js?ver=250813"></script>
+<script src="/sapi/assets/2025/wasm/hls.cmg.js?ver=250813"></script>
+
+<!-- ★ CMG 解密 wasm 模块初始化:
+     cmg.worker.js 作为主线程脚本加载, 暴露全局工厂函数 CMGDecModule (内嵌 wasm, 可离线实例化)。
+     复刻官方 liveInit 的时序: o=CMGDecModule(); window.CNTVH5PlayerModule=o; 等 onRuntimeInitialized 后播放。
+     hls.cmg.js 的 demux (jC 构造器) 直接读取全局 CNTVH5PlayerModule, 未定义即 ReferenceError。 -->
+<script>
+(function(){
+  try {
+    if (typeof CMGDecModule === 'undefined') {
+      if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'CMGDecModule 未定义 (cmg.worker.js 未加载?)'});
+      return;
+    }
+    window.CNTVH5PlayerModule = CMGDecModule();
+    window.CNTVH5PlayerModule.onRuntimeInitialized = function(){
+      window.__cmgReady = true;
+      /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[CMG] wasm 解密模块就绪'}); */
+    };
+    /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[CMG] CNTVH5PlayerModule 已实例化, 等待 wasm 就绪'}); */
+  } catch(e) {
+    if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'CMG 实例化失败: '+e.message});
+  }
+})();
+</script>
+
+<!-- WASM_BASE64 -->
+<!-- CKEY_CORE -->
+<!-- YSPTICKET_WASM -->
+
+<script>
+var v=document.getElementById('v'),info=document.getElementById('info'),hls=null;
+function show(m){info.style.opacity='1';info.textContent=m;}
+
+  // ★★★ 网络层拦截: 无论 hls.js / CMG 用 XHR 还是 fetch, 把所有对 *.cctv.cn / *.yangshipin.cn 的
+  //   请求 (m3u8 / TS / 解密 key) 改写到本地 Go 代理 /media?u=..., 规避 CORS + CDN TLS 指纹。
+  //   页面托管在 127.0.0.1:18888 (与 /media 同源), 故代理请求不受 CORS 限制。
+  //   仅做 URL 改写, 不替换 loader → CMG 自带的解密逻辑完整保留。
+  // ★ CMGPlayer.json 是 wasm 解密配置来源, 单独映射到本地 /Library/CMGPlayer.json,
+  //   避免被 /media 转发到远端导致 TLS/CORS 失败而拿不到配置。
+(function(){
+  var PROXY='http://127.0.0.1:18888/media?u=';
+  function rewrite(url){
+    if(!url) return url;
+    if(url.indexOf('127.0.0.1')>=0||url.indexOf('localhost')>=0) return url; // 已是代理/本地, 不二次改写
+    if(/yangshipin\.cn\/Library\/CMGPlayer\.json/i.test(url)) return '/Library/CMGPlayer.json';
+    // ★ 代理所有外部 HTTP(S) URL (CDN m3u8/TS/KEY 全部走 Go 代理)
+    if(/^https?:\/\//i.test(url)) return PROXY+encodeURIComponent(url);
+    return url;
+  }
+  var _fetch=window.fetch?window.fetch.bind(window):null;
+  if(_fetch){ window.fetch=function(input,init){
+    var u=(typeof input==='string')?input:(input&&input.url?input.url:null);
+    // try{ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[net-RAW] fetch '+(typeof input==='string'?input:(input&&input.url?input.url:'?')).substring(0,140)}); }catch(e){}
+    var ru=rewrite(u);
+    if(ru!==u){
+      // try{ window.chrome.webview.postMessage({log:'[net] fetch→proxy '+String(u).substring(0,90)}); }catch(e){}
+      if(typeof input!=='string'&&input){ try{ input=new Request(ru,input); }catch(e){ input=ru; } } else input=ru;
+    }
+    return _fetch(input,init);
+  };}
+  var _open=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(){
+    if(arguments.length>=2){
+      // try{ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[net-RAW] xhr '+(arguments[0]||'GET')+' '+String(arguments[1]).substring(0,140)}); }catch(e){}
+      var ru=rewrite(arguments[1]);
+      if(ru!==arguments[1]){
+        // try{ window.chrome.webview.postMessage({log:'[net] xhr→proxy '+String(arguments[1]).substring(0,90)}); }catch(e){}
+        arguments[1]=ru;
+      }
+    }
+    return _open.apply(this,arguments);
+  };
+  /* try{ window.chrome.webview.postMessage({log:'[net] 网络拦截已安装 (cctv/yangshipin → /media)'}); }catch(e){} */
+})();
+
+var wasmReady=false, wasmExports=null, wasmMemory=null;
+var handles={}, nextHandle=1;
+var textDecoder=new TextDecoder(), textEncoder=new TextEncoder();
+var __currentInput='', __currentTs='', __currentPid='', __currentGuid='', __currentToken='';
+
+// ★ wasm imports (模拟 cctvh5openapi 的 __wbg_get 回调)
+var wasmImports = { wbg: {
+    __wbg_get_9c1840f7ecd81363: function(p, l) {
+        var path = readStr(p, l);
+        var val = '';
+        if (path.indexOf('state.version')>=0) val='v1';
+        else if (path.indexOf('state.yspappid')>=0) val='519748109';
+        else if (path.indexOf('state.host')>=0||path.indexOf('n.host')>=0) val='yangshipin.cn';
+        else if (path.indexOf('state.protocol')>=0||path.indexOf('n.protocol')>=0) val='https:';
+        else if (path.indexOf('window.location.host')>=0) val='yangshipin.cn';
+        else if (path.indexOf('window.location.protocol')>=0) val='https:';
+        else if (path.indexOf('query.pid')>=0) val=__currentPid;
+        else if (path.indexOf('state.guid')>=0) val=__currentGuid;
+        else if (path.indexOf('state.token')>=0) val=__currentToken||'';
+        else if (path.indexOf('state.input')>=0) val=__currentInput;
+        else if (path.indexOf('state.ts')>=0) val=__currentTs;
+        else if (path.indexOf('state.pid')>=0) val=__currentPid;
+        else /* show('wbg未知:'+path) */;
+        var h=nextHandle++; handles[h]=val; /* show('wbg:'+h+'='+path.substring(14)+'->'+val); */ return h;
+    },
+    __wbindgen_string_get: function(dst, h) {
+        var val = handles[h]||''; var bytes = textEncoder.encode(val);
+        /* show('sg:'+h+'="'+val+'"'); */
+        var m = wasmExports.__wbindgen_malloc || wasmExports.malloc;
+        if (!m) { /* show('sg:nomalloc'); */ return; }
+        var ptr = m(bytes.length, 1);
+        if (!ptr) { /* show('sg:malloc返回0'); */ return; }
+        var dv = new DataView(wasmMemory.buffer);
+        dv.setInt32(dst, ptr, true);
+        dv.setInt32(dst+4, bytes.length, true);
+        new Uint8Array(wasmMemory.buffer).set(bytes, ptr);
+    },
+    __wbindgen_object_drop_ref: function(h) { delete handles[h]; }
+}};
+
+function readStr(p,l) {
+    if(!wasmMemory||l<=0||l>8192) return '';
+    return textDecoder.decode(new Uint8Array(wasmMemory.buffer,p,l));
+}
+
+// ★ 加载 wasm (从 C# 注入的 base64 解码)
+(function loadWasm(){
+    if (!window.__wasmBase64) { /* show('无wasm base64'); */ return }
+    /* show('解码 wasm...'); */
+    try {
+        var bin = atob(window.__wasmBase64);
+        var bytes = new Uint8Array(bin.length);
+        for (var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+        /* show('编译 wasm ('+(bytes.length/1024).toFixed(1)+'KB)...'); */
+        WebAssembly.instantiate(bytes.buffer, wasmImports).then(function(r){
+            wasmExports = r.instance.exports;
+            wasmMemory = wasmExports.memory;
+            wasmReady = true;
+            /* show('WASM就绪, exports:'+Object.keys(wasmExports).join(',')); */
+        }).catch(function(e){ /* show('wasm编译失败:'+e.message) */ });
+    } catch(e) { /* show('wasm解码失败:'+e.message) */ }
+})();
+
+// ★ wasm 函数调用
+function callGetTokenRnd(){
+    if (!wasmReady) throw new Error('wasm未就绪');
+    var ptr = wasmExports.get_token_rnd();
+    if (!ptr) throw new Error('get_token_rnd返回0');
+    return readStr(ptr);
+}
+function callGetSignature(){
+    if (!wasmReady) throw new Error('wasm未就绪');
+    var ptr = wasmExports.get_signature();
+    if (!ptr) throw new Error('get_signature返回0');
+    return readStr(ptr);
+}
+
+// ★ 签名生成 (复刻官方 getSdkData: yspsdkinput + guid + seqid + reqid 喂给 wasm get_signature)
+//   关键修正 (2026-07-12): 官方 get_live_info 流程根本不调用 get_token_rnd!
+//   官方源码 (chk.txt:711): o = getSignature({input: yspsdkinput + "-" + guid + "-" + seqId + "-" + requestId})
+//   其中 yspsdkinput = Gc(d) = md5(按 localeCompare 排序的 body), 由 C# 算好经 yspsdkinput 参数传入。
+//   之前误用 get_token_rnd() 当首段 → input 错 → openapi_signature 错 → 20301 签名验证失败。
+//   返回 openapi_signature 的 sig 段(32字节hex); Yspsdksign 由 C# 拼成 sig-yspsdkinput-guid-seqid-reqid。
+window.__generateSignature = async function(pid, guid, seqId, requestId, token, ts, yspsdkinput) {
+    try {
+        var w=0;
+        while(!wasmReady && w++<50) await new Promise(function(r){setTimeout(r,100)});
+        if(!wasmReady){ window.chrome.webview.postMessage({err:'wasm超时'}); return }
+
+        if (!ts) ts=Date.now().toString();
+        __currentPid=pid; __currentGuid=guid; __currentToken=(token||''); __currentInput=''; __currentTs=ts;
+        /* show('准备调get_signature... ts='+ts); */
+
+        // ★ input = yspsdkinput + "-" + guid + "-" + seqId + "-" + requestId (与官方一致)
+        var fi = yspsdkinput + '-' + guid + '-' + seqId + '-' + requestId;
+        __currentInput = fi; __currentTs = ts;
+        /* show('input='+fi.substring(0,48)+'...'); */
+
+        var sp2=wasmExports.__wbindgen_add_to_stack_pointer(-16);
+        var sigPtr=0, sigLen=0;
+        try{
+            wasmExports.get_signature(sp2);
+            var dv3=new DataView(wasmMemory.buffer,sp2,8);
+            sigPtr=dv3.getInt32(0,true); sigLen=dv3.getInt32(4,true);
+        }finally{wasmExports.__wbindgen_add_to_stack_pointer(16)}
+        if(!sigPtr||sigLen<=0){ window.chrome.webview.postMessage({err:'sig返回0'}); return }
+        var sig=readStr(sigPtr, sigLen);
+        /* show('sig='+sig.substring(0,20)); */
+
+        // ★ 返回 openapi_signature 的 sig 段; Yspsdksign 由 C# 拼成 sig-yspsdkinput-guid-seqid-reqid
+        window.chrome.webview.postMessage({rnd:yspsdkinput, signature:sig, ts:ts});
+    } catch(e) {
+        window.chrome.webview.postMessage({err:e.message});
+    }
+};
+
+// ★ /web/open/token 的 rnd (调用 keygen_bg.wasm 的 get_token_rnd, 与 get_signature 同 wasm)
+window.__genTokenRnd = async function(guid, token, tsMs) {
+    try {
+        var w=0; while(!wasmReady && w++<50) await new Promise(function(r){setTimeout(r,100)});
+        if(!wasmReady){ window.chrome.webview.postMessage({err:'wasm超时(tkrnd)'}); return }
+        __currentGuid=guid; __currentToken=token; __currentTs=String(tsMs);
+        var sp=wasmExports.__wbindgen_add_to_stack_pointer(-16);
+        var ptr=0,len=0;
+        try{ wasmExports.get_token_rnd(sp); var dv=new DataView(wasmMemory.buffer,sp,8); ptr=dv.getInt32(0,true); len=dv.getInt32(4,true); }finally{wasmExports.__wbindgen_add_to_stack_pointer(16)}
+        if(!ptr||len<=0){ window.chrome.webview.postMessage({err:'get_token_rnd返回0'}); return }
+        var rnd=readStr(ptr,len);
+        window.chrome.webview.postMessage({tokenRnd:rnd});
+    } catch(e) { window.chrome.webview.postMessage({err:'tkrnd:'+e.message}); }
+};
+
+// ★★ 媒体请求已改由页面顶部 [net] 网络拦截层 (fetch/XHR patch) 统一改写到 /media 代理,
+//   不再需要自定义 Loader —— 这样 CMG 自带的解密 loader 保持完整, 仅网络目的地被透明改写。
+//   (早期曾用自定义 ProxyLoader 替换 loader, 但 CMG 的 hls.cmg.js 不读取该配置而直连 CDN,
+//    导致 networkError; 网络层拦截与 loader 实现无关, 故更稳。)
+
+// ★★★ 密钥表探针: 直接读 CMG wasm 内存(HEAPU8), 对比 InitPlayer/播放前后, 定位密钥表并判断是否为空
+//   (比给混淆 wasm 插桩更可靠: 无需知道密钥表地址, 直接从 JS 读 wasm 线性内存做 diff)
+var __ktblDone = false;
+function installKeyTableProbe(mod){
+  if (__ktblDone) return; __ktblDone = true;
+  function getHeap(){
+    try { if (mod.HEAPU8) return mod.HEAPU8; } catch(e){}
+    try { if (mod.asm && mod.asm.memory) return new Uint8Array(mod.asm.memory.buffer); } catch(e){}
+    return null;
+  }
+  function snap(H){ var a = new Uint8Array(H.length); a.set(H); return a; }
+  function hex(b, off, n){ var s=''; for(var i=0;i<n;i++){ var x=b[off+i]>>>0; s+=('0'+x.toString(16)).slice(-2);} return s; }
+  var tries=0;
+  function waitHeap(cb){
+    var H=getHeap();
+    if(H){cb(H);return;}
+    if(tries++<60) setTimeout(function(){waitHeap(cb);},100);
+    else /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] HEAPU8 不可用'}) */;
+  }
+  waitHeap(function(H){
+    var S1=snap(H);
+    /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] S1 len='+S1.length}); */
+    setTimeout(function(){
+      var Sa=snap(H);
+      setTimeout(function(){
+        var Sb=snap(H);
+        var BLK=64, cand=[], nzSa=0;
+        for(var off=0; off+BLK<=Sa.length; off+=BLK){
+          var nz=false; for(var k=0;k<BLK;k++){ if(Sa[off+k]!==0){nz=true;break;} }
+          if(nz) nzSa++;
+          var stable=true; for(var k=0;k<BLK;k++){ if(Sa[off+k]!==Sb[off+k]){stable=false;break;} }
+          if(!stable) continue;
+          var chg=false; for(var k=0;k<BLK;k++){ if(Sa[off+k]!==S1[off+k]){chg=true;break;} }
+          if(chg && nz) cand.push(off.toString(16)+':'+hex(Sa,off,32));
+        }
+        /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] 非零块='+nzSa+' 候选密钥块='+cand.length+' 样本='+cand.slice(0,15).join(' | ')}); */
+      }, 4000);
+    }, 2000);
+  });
+}
+
+// ★ CMG 播放
+window.__startM3u8 = function(url) {
+    if (hls) { try { hls.destroy(); } catch(e){}; hls = null; }
+    if (typeof Hls==='undefined'||!Hls.isSupported()){show('Hls不支持');return}
+    if (typeof window.CNTVH5PlayerModule === 'undefined'){show('CMG 解密模块未初始化');return}
+    var mod = window.CNTVH5PlayerModule;
+    // ★ 媒体请求由页面顶部安装的 [net] 网络拦截统一改写到 /media 代理
+    //   (保留 CMG 自带 loader, 不破坏 TS 解密逻辑; 不再额外诊断抓取, 避免消耗 m3u8 单次签名)
+    //   enableWorker:false → demux 在主线程执行, 才能访问全局 CNTVH5PlayerModule (CMG 解密 wasm)。
+    function go(){
+        hls=new Hls({
+            autoStartLoad:true, enableWorker:false
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED,function(){v.play().catch(function(){v.muted=true;v.play()});show('播放中');setTimeout(function(){info.style.opacity='0';info.style.transition='opacity .5s';},4000);});
+        hls.on(Hls.Events.ERROR,function(e,d){
+            var extra='';
+            try {
+                extra=' | err='+(d.err&&d.err.message?d.err.message:(d.err?String(d.err):''))
+                    +' | ctx='+(d.context&&d.context.url?d.context.url:'')
+                    +' | resp='+(d.response?d.response.code:'')
+                    +' | stack='+(d.err&&d.err.stack?d.err.stack.substring(0,400):'');
+            } catch(e2){}
+            //if(d.fatal) show('错误:'+d.type+'/'+d.details+extra);
+            //else show('非致命:'+d.type+'/'+d.details+extra);  // ★ 调试期恢复显示非致命错误
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED,function(ev,data){
+          try{
+            var mt=hls.config&&hls.config.mediaTagId;
+            var lv=(data&&data.levels&&data.levels[0])||{};
+            var dump={mt:mt, url:(hls&&hls.url||'?'), lvl0:url&&url.length?url.substring(0,200):'?', attrs:lv.attrs?JSON.stringify(lv.attrs).substring(0,300):'?', audioCodec:lv.audioCodec, videoCodec:lv.videoCodec, hasDetails:!!lv.details};
+            /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[MTID] '+JSON.stringify(dump)}); */
+          }catch(e){ /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[MTID-ERR] '+e.message}); */ }
+        });
+        hls.attachMedia(v); hls.loadSource(url);
+        show('CMG解密中...');
+        installKeyTableProbe(mod);
+    }
+    // ★ 复刻官方时序: 等 wasm 解密模块就绪后再 loadSource, 否则首片 demux 时 wasm 未编译会失败
+    if (mod.ready && typeof mod.ready.then === 'function') {
+        //show('等待 CMG wasm 就绪...');
+        mod.ready.then(go).catch(function(err){ show('CMG wasm 错误:'+(err&&err.message?err.message:err)); });
+    } else {
+        go();
+    }
+};
+</script>
+
+<!-- ===== cKey 生成器 (纯 JS, 复刻官方 chunk-vendors 模块 fb15 的 ts()) =====
+     CORE 由 C# 在运行时以 base64 注入到 window.__ckeyCoreB64。
+     使用与已验证 Node 版 (_ckey_node.js) 完全相同的 env-stub 环境,
+     不依赖真实 DOM, 因此生成的 cKey 与浏览器 golden 完全一致。 -->
+<script>
+(function(){
+  function recProxy(){
+    var f=function(){return recProxy();};
+    return new Proxy(f,{get:function(t,p){
+      if(p===Symbol.toPrimitive)return function(){return 0;};
+      if(p==='length')return 0;
+      if(p==='then')return undefined;
+      if(p===Symbol.iterator)return undefined;
+      return recProxy();
+    },apply:function(){return recProxy();},construct:function(){return recProxy();}});
+  }
+  function makeN(){
+    var n=function(){return recProxy();};
+    n.r=function(){};n.p='';n.n=function(t){return t&&t.__esModule?t:{default:t};};n.d=function(){};
+    return n;
+  }
+  function buildEnv(url,ref,ua){
+    var nav={userAgent:ua,appCodeName:'Mozilla',appName:'Netscape',platform:'Win32',language:'zh-CN',cookieEnabled:true,onLine:true,hardwareConcurrency:8,maxTouchPoints:0,vendor:'Google Inc.',product:'Gecko',productSub:'20030107',vendorSub:'',mimeTypes:[],plugins:[],languages:['zh-CN','zh'],userAgentData:{}};
+    var loc={href:url,hostname:url.replace(/^https?:\/\//,'').split('/')[0],pathname:url.replace(/^https?:\/\/[^/]+/,'')||'/',search:'',hash:'',protocol:'https:',origin:url.replace(/\/.*$/,'')};
+    var doc={URL:url,referrer:ref,currentScript:null,documentElement:{clientWidth:1920,clientHeight:950},body:{clientWidth:1920,clientHeight:950},cookie:'',domain:'yangshipin.cn',location:loc,defaultView:null,readyState:'complete',visibilityState:'visible',hidden:false};
+    var win={navigator:nav,location:loc,document:doc,history:{length:2},screen:{width:1920,height:1080,availWidth:1920,availHeight:1040,colorDepth:24,pixelDepth:24},outerWidth:1920,innerWidth:1920,innerHeight:950,outerHeight:1040,devicePixelRatio:1,name:'',closed:false,yspLogin:{default:{}},self:null,top:null,parent:null,frames:[]};
+    win.self=win;win.top=win;win.parent=win;win.frames=win;doc.defaultView=win;
+    var wrap=function(obj){return new Proxy(obj,{get:function(t,p){return (p in t)?t[p]:recProxy();}});};
+    return {win:wrap(win),doc:wrap(doc),nav:wrap(nav),ls:recProxy()};
+  }
+  function b64ToUtf8(b64){var bin=atob(b64);var bytes=Uint8Array.from(bin,function(c){return c.charCodeAt(0);});return new TextDecoder().decode(bytes);}
+  var CORE=window.__ckeyCoreB64?b64ToUtf8(window.__ckeyCoreB64):'';
+  var _cache={};
+  function getTs(env){
+    var key=env.win.location.href+'|'+env.nav.userAgent+'|'+env.doc.referrer;
+    if(_cache[key])return _cache[key];
+    var f=new Function('t','e','n','window','document','navigator','localStorage','console','regeneratorRuntime',
+      CORE+'\n; return (typeof ts!=="undefined")?ts:null;');
+    var ts=f({},{},makeN(),env.win,env.doc,env.nav,env.ls,console,recProxy());
+    if(!ts)throw new Error('ts 未捕获');
+    _cache[key]=ts;return ts;
+  }
+  var UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
+  window.__genCKey=function(cnlid,tsSec,version,guid,platform,documentURL){
+    var url=documentURL||'https://yangshipin.cn/tv/home';
+    var env=buildEnv(url,'',UA);
+    var ts=getTs(env);
+    var sec=(tsSec!=null&&tsSec!=='')?tsSec:Math.round(Date.now()/1000);
+    return ''+ts(cnlid,sec,version,guid,platform);
+  };
+  /* if(window.chrome&&window.chrome.webview)window.chrome.webview.postMessage({log:'cKey shim 就绪'}); */
+})();
+</script>
+
+<!-- ===== yspticket 生成器 (复刻官方 _c + RJq7sO71JF.wasm 的 AES-CTR + PCG 尾缀) =====
+     wasm 由 C# 在运行时以 base64 注入到 window.__yspTicketWasmB64。
+     攻破要点 (详见《央视频定制APP技术白皮书 V3.0》):
+       1) 官方 _c(livepid, ts, cnlid, guid, yspappid, appVer) 内部调用
+          wasm 的 _aes_encrypt_ctr (导出名 T) + _get_encrypt_str_len (导出名 S) + _malloc (导出名 R)。
+       2) 明文布局 = livepid + sep + ts + sep + guid + sep + yspappid + PCG尾缀(11字节),
+          总长由 S() 权威返回 = 62 字节。cnlid / appVer 参与传参但实际不参与明文 (已 XOR 验证)。
+       3) AES-CTR 密钥/IV 是 wasm 内常量; 尾缀 11 字节是 PCG 随机数, 种子来自 wasm 的
+          _time import (浏览器里本应 Date.now()/1000)。这里把种子固定为认证返回的 ts (秒),
+          既作 _c 第2参数、又作 _time 种子, 与官方调用一致, 且便于复现/调试。
+       4) wasm import 全部挂在 module "a" 下: a.a=内存, a.b=表,
+          a.O=is_browser_environment 必须返回 1 (否则 CTR 走非浏览器分支),
+          a.d=_time(ptr) 写入种子并返回; 其余 import 一律返回 0 (本路径不会用到)。
+-->
+<script>
+// ★★ 关键修复 (2026-07-12): 原 __genYspTicket 是 async, 返回 Promise。
+//    WebView2 的 ExecuteScriptAsync 不会 await Promise, 会把它序列化成 {} (Object),
+//    导致 C# 侧 GetString() 报 "requires an element of type 'String', but ... 'Object'",
+//    随即回退到过期硬编码 yspticket → live 401。
+//    修复: wasm 在页面加载时预实例化一次 (与 cKey 同款异步 instantiate 一次),
+//         __genYspTicket 改为同步函数直接 return hex 字符串, ExecuteScriptAsync 就能拿到 String。
+//         种子用模块级 __yspSeed, 每次调用前设置; import d(_time) 读它 → 按 ts 确定性输出。
+//         官方 SPA 亦是全程复用同一 wasm 实例, 此写法更贴合官方行为。
+(function () {
+  var __yspReady = false, __yspEx = null, __yspMem = null, __yspSeed = 0;
+
+  function initYspWasm() {
+    if (!window.__yspTicketWasmB64) {
+      if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ error: 'yspticket wasm 未注入' });
+      return;
+    }
+    try {
+      var bin = atob(window.__yspTicketWasmB64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+      // 内存/表 必须是真实的 WebAssembly 对象 (wasm 以 a.a / a.b 导入)
+      var mem = new WebAssembly.Memory({ initial: 256, maximum: 256 });
+      var tbl = new WebAssembly.Table({ initial: 1024, maximum: 4096, element: 'anyfunc' });
+
+      // Emscripten 风格 import: module "a", 用 Proxy 兜底其余未知函数 import
+      var importObject = new Proxy({}, {
+        get: function (t, mod) {
+          return new Proxy({}, {
+            get: function (t2, fn) {
+              if (fn === 'a') return mem;     // 内存导入 a.a
+              if (fn === 'b') return tbl;     // 表导入 a.b
+              if (fn === 'O') return function () { return 1; };              // is_browser_environment -> 必须 1
+              if (fn === 'd') return function (p) { if (p) new Int32Array(mem.buffer)[p >> 2] = __yspSeed; return __yspSeed; }; // _time(ptr)
+              return function () { return 0; };                              // 其余 import 一律返回 0
+            }
+          });
+        }
+      });
+
+      WebAssembly.instantiate(bytes.buffer, importObject).then(function (res) {
+        __yspEx = res.instance.exports; __yspMem = mem; __yspReady = true;
+        /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ log: 'yspticket wasm 就绪, exports:' + Object.keys(__yspEx).length }); */
+      }).catch(function (e) {
+        /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ error: 'yspticket wasm 编译失败:' + e.message }); */
+      });
+    } catch (e) {
+      /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ error: 'yspticket wasm 解码失败:' + e.message }); */
+    }
+  }
+  initYspWasm();   // 页面加载即预实例化, 播放时早已就绪
+
+  // ★ 同步版本: 直接返回 62 字节 hex 字符串 (不是 Promise!)
+  window.__genYspTicket = function (livepid, tsSec, cnlid, guid, yspappid, appVer) {
+    try {
+      if (!__yspReady || !__yspEx) { /* window.chrome.webview.postMessage({ error: 'yspticket wasm 未就绪' }); */ return ''; }
+      var seed = parseInt(tsSec, 10);
+      if (!Number.isFinite(seed) || seed <= 0) seed = Math.floor(Date.now() / 1000);
+      __yspSeed = seed;   // import d(_time) 会读取它作 PCG 尾缀种子
+
+      var T = __yspEx.T, R = __yspEx.R, S = __yspEx.S;   // _aes_encrypt_ctr / _malloc / _get_encrypt_str_len
+      if (typeof T !== 'function' || typeof R !== 'function' || typeof S !== 'function') {
+        window.chrome.webview.postMessage({ error: 'yspticket wasm 缺导出 T/R/S' }); return '';
+      }
+
+      function sp(str) { var e = new TextEncoder().encode(str); var p = R(e.length + 1); new Uint8Array(__yspMem.buffer, p, e.length).set(e); new Uint8Array(__yspMem.buffer)[p + e.length] = 0; return p; }
+      var a = sp(livepid), s = sp(tsSec), c = sp(cnlid), u = sp(guid), l = sp(yspappid), f = sp(appVer);
+
+      var d = S(a, s, c, u, l, f);   // 权威明文+尾缀长度
+      if (!d || d <= 0) { /* window.chrome.webview.postMessage({ error: 'yspticket 长度非法:' + d }); */ return ''; }
+      var w = R(d);
+      T(a, s, c, u, l, f, w);        // 写入加密结果到 w
+      var out = new Uint8Array(__yspMem.buffer, w, d);
+      var hex = '';
+      for (var i = 0; i < d; i++) hex += ('0' + out[i].toString(16)).slice(-2);
+      /* window.chrome.webview.postMessage({ log: 'yspticket 动态生成成功(' + d + '字节)' }); */
+      return hex;
+    } catch (e) {
+      /* window.chrome.webview.postMessage({ error: 'yspticket 生成异常:' + e.message }); */
+      return '';
+    }
+  };
+})();
+</script>
+</body></html>

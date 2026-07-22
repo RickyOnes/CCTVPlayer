@@ -1,0 +1,41 @@
+# ===== Build output =====
+*.exe
+*.dll
+bin/
+obj/
+CCTVPlayer/bin/
+CCTVPlayer/obj/
+
+# Go build artifact left in source dir
+cctv-proxy/cctv-proxy.exe
+
+# C# build / publish artifacts (regenerated on build)
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+*.xml
+
+# ===== Dependencies =====
+node_modules/
+
+# ===== Backups (compressed project snapshots) =====
+*.rar
+
+# ===== Third-party toolchain (wabt binaries) =====
+wabt反编译工具/
+
+# ===== Internal project data (agent memory) =====
+.codebuddy/
+
+# ===== Logs =====
+*.log
+
+# ===== Scratch / ad-hoc test files =====
+cctv-proxy/_*.js
+cctv-proxy/_*.cjs
+cctv-proxy/_*.wat
+
+# ===== OS =====
+Thumbs.db
+Desktop.ini
+.DS_Store
