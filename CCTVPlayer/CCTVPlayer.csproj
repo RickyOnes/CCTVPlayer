@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>tv-icon.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- 不生成 .pdb 调试文件 -->
+    <DebugType>none</DebugType>
+    <!-- 只保留 .pdb 关联文件（避免复制 .xml 文档） -->
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
+    <!-- 启用单文件压缩 -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- 只包含中文资源，减小体积 -->
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+    <PackageReference Include="Wasmtime" Version="20.0.2" />
+  </ItemGroup>
+
+  <!-- 伴生文件（调试和发布都复制） -->
+  <ItemGroup>
+    <Content Include="player.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="tv-icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="keygen_bg.wasm" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="RJq7sO71JF.wasm" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="ts_module_body.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="gen_yspticket.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    
+    <!-- ★ 使用宏明确路径 ★ -->
+    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\cctv-proxy.exe"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="Always"
+            Link="cctv-proxy.exe" />
+    
+    <!-- 代理缓存文件（可选） -->
+    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_cmg.worker.js"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="Always"
+            Link="sapi_cache\assets_2025_wasm_cmg.worker.js" />
+    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_hls.cmg.js"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="Always"
+            Link="sapi_cache\assets_2025_wasm_hls.cmg.js" />
+  </ItemGroup>
+
+  <!-- 如果上述方式仍不工作，可用此后备 -->
+  <Target Name="CopyProxyAfterPublish" AfterTargets="Publish" Condition="!Exists('$(PublishDir)\cctv-proxy.exe')">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\cctv-proxy\cctv-proxy.exe"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

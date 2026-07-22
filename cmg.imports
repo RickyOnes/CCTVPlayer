@@ -1,0 +1,64 @@
+
+cmg.wasm:	file format wasm 0x1
+
+Section Details:
+
+Import[58]:
+ - func[0] sig=12 <env.e> <- env.e
+ - func[1] sig=7 <env.f> <- env.f
+ - func[2] sig=8 <env.g> <- env.g
+ - func[3] sig=3 <env.h> <- env.h
+ - func[4] sig=17 <env.i> <- env.i
+ - func[5] sig=9 <env.j> <- env.j
+ - func[6] sig=1 <env.k> <- env.k
+ - func[7] sig=7 <env.l> <- env.l
+ - func[8] sig=14 <env.m> <- env.m
+ - func[9] sig=10 <env.n> <- env.n
+ - func[10] sig=5 <env.o> <- env.o
+ - func[11] sig=2 <env.p> <- env.p
+ - func[12] sig=9 <env.q> <- env.q
+ - func[13] sig=7 <env.r> <- env.r
+ - func[14] sig=5 <env.s> <- env.s
+ - func[15] sig=2 <env.t> <- env.t
+ - func[16] sig=1 <env.u> <- env.u
+ - func[17] sig=12 <env.v> <- env.v
+ - func[18] sig=12 <env.w> <- env.w
+ - func[19] sig=2 <env.x> <- env.x
+ - func[20] sig=13 <env.y> <- env.y
+ - func[21] sig=8 <env.z> <- env.z
+ - func[22] sig=9 <env.A> <- env.A
+ - func[23] sig=8 <env.B> <- env.B
+ - func[24] sig=7 <env.C> <- env.C
+ - func[25] sig=8 <env.D> <- env.D
+ - func[26] sig=5 <env.E> <- env.E
+ - func[27] sig=7 <env.F> <- env.F
+ - func[28] sig=16 <env.G> <- env.G
+ - func[29] sig=7 <env.H> <- env.H
+ - func[30] sig=8 <env.I> <- env.I
+ - func[31] sig=1 <env.J> <- env.J
+ - func[32] sig=11 <env.K> <- env.K
+ - func[33] sig=1 <env.L> <- env.L
+ - func[34] sig=11 <env.M> <- env.M
+ - func[35] sig=3 <env.N> <- env.N
+ - func[36] sig=11 <env.O> <- env.O
+ - func[37] sig=1 <env.P> <- env.P
+ - func[38] sig=3 <env.Q> <- env.Q
+ - func[39] sig=8 <env.R> <- env.R
+ - func[40] sig=8 <env.S> <- env.S
+ - func[41] sig=8 <env.T> <- env.T
+ - func[42] sig=7 <env.U> <- env.U
+ - func[43] sig=12 <env.V> <- env.V
+ - func[44] sig=5 <env.W> <- env.W
+ - func[45] sig=15 <env.X> <- env.X
+ - func[46] sig=4 <env.Y> <- env.Y
+ - func[47] sig=3 <env.Z> <- env.Z
+ - func[48] sig=6 <env._> <- env._
+ - func[49] sig=11 <env.$> <- env.$
+ - func[50] sig=7 <env.aa> <- env.aa
+ - global[0] i32 mutable=0 <- env.__table_base
+ - global[1] i32 mutable=0 <- env.a
+ - global[2] i32 mutable=0 <- env.b
+ - global[3] i32 mutable=0 <- env.c
+ - global[4] i32 mutable=0 <- env.d
+ - memory[0] pages: initial=256 max=1536 <- env.memory
+ - table[0] type=funcref initial=560 <- env.table

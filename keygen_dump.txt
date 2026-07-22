@@ -1,0 +1,376 @@
+
+keygen_bg.wasm:	file format wasm 0x1
+
+Section Details:
+
+Type[9]:
+ - type[0] (i32, i32) -> i32
+ - type[1] (i32, i32) -> nil
+ - type[2] (i32, i32, i32) -> i32
+ - type[3] (i32, i32, i32) -> nil
+ - type[4] (i32) -> nil
+ - type[5] (i32) -> i32
+ - type[6] (i32, i32, i32, i32, i32) -> i32
+ - type[7] (i32, i32, i32, i32) -> i32
+ - type[8] (i32, i32, i32, i32, i32) -> nil
+Import[3]:
+ - func[0] sig=0 <wbg.__wbg_get_9c1840f7ecd81363> <- wbg.__wbg_get_9c1840f7ecd81363
+ - func[1] sig=1 <wbg.__wbindgen_string_get> <- wbg.__wbindgen_string_get
+ - func[2] sig=4 <wbg.__wbindgen_object_drop_ref> <- wbg.__wbindgen_object_drop_ref
+Function[71]:
+ - func[3] sig=5
+ - func[4] sig=4 <get_signature>
+ - func[5] sig=1
+ - func[6] sig=4 <get_token_rnd>
+ - func[7] sig=0
+ - func[8] sig=2
+ - func[9] sig=6
+ - func[10] sig=2
+ - func[11] sig=4
+ - func[12] sig=2
+ - func[13] sig=1
+ - func[14] sig=0
+ - func[15] sig=0
+ - func[16] sig=1
+ - func[17] sig=4
+ - func[18] sig=1
+ - func[19] sig=0
+ - func[20] sig=0
+ - func[21] sig=1
+ - func[22] sig=3
+ - func[23] sig=1
+ - func[24] sig=3
+ - func[25] sig=3
+ - func[26] sig=3
+ - func[27] sig=1
+ - func[28] sig=1
+ - func[29] sig=8
+ - func[30] sig=4
+ - func[31] sig=1
+ - func[32] sig=0
+ - func[33] sig=3
+ - func[34] sig=3
+ - func[35] sig=0
+ - func[36] sig=3
+ - func[37] sig=1
+ - func[38] sig=5
+ - func[39] sig=2
+ - func[40] sig=3
+ - func[41] sig=1
+ - func[42] sig=2
+ - func[43] sig=1
+ - func[44] sig=0 <__wbindgen_malloc>
+ - func[45] sig=6
+ - func[46] sig=7 <__wbindgen_realloc>
+ - func[47] sig=0
+ - func[48] sig=1
+ - func[49] sig=0
+ - func[50] sig=4
+ - func[51] sig=4
+ - func[52] sig=3
+ - func[53] sig=7
+ - func[54] sig=3 <__wbindgen_free>
+ - func[55] sig=2
+ - func[56] sig=0
+ - func[57] sig=0
+ - func[58] sig=0
+ - func[59] sig=1
+ - func[60] sig=1
+ - func[61] sig=1
+ - func[62] sig=0
+ - func[63] sig=0
+ - func[64] sig=1
+ - func[65] sig=0
+ - func[66] sig=5 <__wbindgen_add_to_stack_pointer>
+ - func[67] sig=0
+ - func[68] sig=0
+ - func[69] sig=1
+ - func[70] sig=0
+ - func[71] sig=0
+ - func[72] sig=1
+ - func[73] sig=1
+Table[1]:
+ - table[0] type=funcref initial=30 max=30
+Memory[1]:
+ - memory[0] pages: initial=17
+Global[1]:
+ - global[0] i32 mutable=1 - init i32=1048576
+Export[7]:
+ - memory[0] -> "memory"
+ - func[6] <get_token_rnd> -> "get_token_rnd"
+ - func[4] <get_signature> -> "get_signature"
+ - func[44] <__wbindgen_malloc> -> "__wbindgen_malloc"
+ - func[46] <__wbindgen_realloc> -> "__wbindgen_realloc"
+ - func[54] <__wbindgen_free> -> "__wbindgen_free"
+ - func[66] <__wbindgen_add_to_stack_pointer> -> "__wbindgen_add_to_stack_pointer"
+Elem[1]:
+ - segment[0] flags=0 table=0 count=29 - init i32=1
+  - elem[1] = ref.func:57
+  - elem[2] = ref.func:32
+  - elem[3] = ref.func:47
+  - elem[4] = ref.func:38
+  - elem[5] = ref.func:67
+  - elem[6] = ref.func:65
+  - elem[7] = ref.func:37
+  - elem[8] = ref.func:51
+  - elem[9] = ref.func:39
+  - elem[10] = ref.func:20
+  - elem[11] = ref.func:68
+  - elem[12] = ref.func:59
+  - elem[13] = ref.func:60
+  - elem[14] = ref.func:62
+  - elem[15] = ref.func:41
+  - elem[16] = ref.func:61
+  - elem[17] = ref.func:69
+  - elem[18] = ref.func:50
+  - elem[19] = ref.func:35
+  - elem[20] = ref.func:23
+  - elem[21] = ref.func:28
+  - elem[22] = ref.func:73
+  - elem[23] = ref.func:51
+  - elem[24] = ref.func:42
+  - elem[25] = ref.func:19
+  - elem[26] = ref.func:70
+  - elem[27] = ref.func:71
+  - elem[28] = ref.func:56
+  - elem[29] = ref.func:63
+Code[71]:
+ - func[3] size=4612
+ - func[4] size=2594 <get_signature>
+ - func[5] size=2093
+ - func[6] size=975 <get_token_rnd>
+ - func[7] size=838
+ - func[8] size=686
+ - func[9] size=712
+ - func[10] size=652
+ - func[11] size=766
+ - func[12] size=618
+ - func[13] size=505
+ - func[14] size=390
+ - func[15] size=359
+ - func[16] size=490
+ - func[17] size=358
+ - func[18] size=369
+ - func[19] size=324
+ - func[20] size=322
+ - func[21] size=324
+ - func[22] size=386
+ - func[23] size=296
+ - func[24] size=210
+ - func[25] size=188
+ - func[26] size=184
+ - func[27] size=186
+ - func[28] size=193
+ - func[29] size=278
+ - func[30] size=159
+ - func[31] size=131
+ - func[32] size=192
+ - func[33] size=131
+ - func[34] size=354
+ - func[35] size=121
+ - func[36] size=200
+ - func[37] size=102
+ - func[38] size=77
+ - func[39] size=65
+ - func[40] size=391
+ - func[41] size=77
+ - func[42] size=65
+ - func[43] size=65
+ - func[44] size=47 <__wbindgen_malloc>
+ - func[45] size=56
+ - func[46] size=37 <__wbindgen_realloc>
+ - func[47] size=178
+ - func[48] size=250
+ - func[49] size=25
+ - func[50] size=37
+ - func[51] size=23
+ - func[52] size=65
+ - func[53] size=846
+ - func[54] size=13 <__wbindgen_free>
+ - func[55] size=22
+ - func[56] size=20
+ - func[57] size=16
+ - func[58] size=25
+ - func[59] size=32
+ - func[60] size=34
+ - func[61] size=19
+ - func[62] size=16
+ - func[63] size=16
+ - func[64] size=91
+ - func[65] size=322
+ - func[66] size=11 <__wbindgen_add_to_stack_pointer>
+ - func[67] size=117
+ - func[68] size=13
+ - func[69] size=12
+ - func[70] size=13
+ - func[71] size=13
+ - func[72] size=25
+ - func[73] size=9
+Data[4]:
+ - segment[0] memory=0 size=985 - init i32=1048576
+  - 0100000: 2f55 7365 7273 2f77 616e 6773 686f 756d  /Users/wangshoum
+  - 0100010: 696e 672f 2e63 6172 676f 2f72 6567 6973  ing/.cargo/regis
+  - 0100020: 7472 792f 7372 632f 696e 6465 782e 6372  try/src/index.cr
+  - 0100030: 6174 6573 2e69 6f2d 3139 3439 6366 3863  ates.io-1949cf8c
+  - 0100040: 3662 3562 3535 3766 2f77 6173 6d2d 6269  6b5b557f/wasm-bi
+  - 0100050: 6e64 6765 6e2d 302e 322e 3933 2f73 7263  ndgen-0.2.93/src
+  - 0100060: 2f63 6f6e 7665 7274 2f73 6c69 6365 732e  /convert/slices.
+  - 0100070: 7273 0000 0000 1000 7200 0000 1c01 0000  rs......r.......
+  - 0100080: 0e00 0000 2f55 7365 7273 2f77 616e 6773  ..../Users/wangs
+  - 0100090: 686f 756d 696e 672f 2e72 7573 7475 702f  houming/.rustup/
+  - 01000a0: 746f 6f6c 6368 6169 6e73 2f73 7461 626c  toolchains/stabl
+  - 01000b0: 652d 6161 7263 6836 342d 6170 706c 652d  e-aarch64-apple-
+  - 01000c0: 6461 7277 696e 2f6c 6962 2f72 7573 746c  darwin/lib/rustl
+  - 01000d0: 6962 2f73 7263 2f72 7573 742f 6c69 6272  ib/src/rust/libr
+  - 01000e0: 6172 792f 616c 6c6f 632f 7372 632f 736c  ary/alloc/src/sl
+  - 01000f0: 6963 652e 7273 0000 8400 1000 7200 0000  ice.rs......r...
+  - 0100100: a100 0000 1900 0000 2f55 7365 7273 2f77  ......../Users/w
+  - 0100110: 616e 6773 686f 756d 696e 672f 2e72 7573  angshouming/.rus
+  - 0100120: 7475 702f 746f 6f6c 6368 6169 6e73 2f73  tup/toolchains/s
+  - 0100130: 7461 626c 652d 6161 7263 6836 342d 6170  table-aarch64-ap
+  - 0100140: 706c 652d 6461 7277 696e 2f6c 6962 2f72  ple-darwin/lib/r
+  - 0100150: 7573 746c 6962 2f73 7263 2f72 7573 742f  ustlib/src/rust/
+  - 0100160: 6c69 6272 6172 792f 616c 6c6f 632f 7372  library/alloc/sr
+  - 0100170: 632f 7261 775f 7665 632e 7273 0801 1000  c/raw_vec.rs....
+  - 0100180: 7400 0000 2802 0000 1100 0000 6363 7476  t...(.......cctv
+  - 0100190: 6835 6f70 656e 6170 692e 7374 6174 652e  h5openapi.state.
+  - 01001a0: 7665 7273 696f 6e63 6374 7668 356f 7065  versioncctvh5ope
+  - 01001b0: 6e61 7069 2e73 7461 7465 2e67 7569 643b  napi.state.guid;
+  - 01001c0: 0100 0000 0000 0000 bf01 1000 0100 0000  ................
+  - 01001d0: 6775 6964 2074 6167 3a20 0000 d001 1000  guid tag: ......
+  - 01001e0: 0a00 0000 6363 7476 6835 6f70 656e 6170  ....cctvh5openap
+  - 01001f0: 692e 7374 6174 652e 7973 7061 7070 6964  i.state.yspappid
+  - 0100200: 7973 7061 7070 6964 3a00 0000 0002 1000  yspappid:.......
+  - 0100210: 0900 0000 bf01 1000 0100 0000 7973 7061  ............yspa
+  - 0100220: 7070 6964 2074 6167 3a20 0000 1c02 1000  ppid tag: ......
+  - 0100230: 0e00 0000 7769 6e64 6f77 2e6c 6f63 6174  ....window.locat
+  - 0100240: 696f 6e2e 686f 7374 686f 7374 3a00 0000  ion.hosthost:...
+  - 0100250: 4802 1000 0500 0000 bf01 1000 0100 0000  H...............
+  - 0100260: 686f 7374 2074 6167 3a20 0000 6002 1000  host tag: ..`...
+  - 0100270: 0a00 0000 7769 6e64 6f77 2e6c 6f63 6174  ....window.locat
+  - 0100280: 696f 6e2e 7072 6f74 6f63 6f6c 7072 6f74  ion.protocolprot
+  - 0100290: 6f63 6f6c 3a00 0000 8c02 1000 0900 0000  ocol:...........
+  - 01002a0: bf01 1000 0100 0000 7072 6f74 6f63 6f6c  ........protocol
+  - 01002b0: 2074 6167 3a20 0000 a802 1000 0e00 0000   tag: ..........
+  - 01002c0: 6363 7476 6835 6f70 656e 6170 692e 7374  cctvh5openapi.st
+  - 01002d0: 6174 652e 746f 6b65 6e74 6f6b 656e 3a00  ate.tokentoken:.
+  - 01002e0: d902 1000 0600 0000 bf01 1000 0100 0000  ................
+  - 01002f0: 746f 6b65 6e20 7461 673a 2000 f002 1000  token tag: .....
+  - 0100300: 0b00 0000 6363 7476 6835 6f70 656e 6170  ....cctvh5openap
+  - 0100310: 692e 7374 6174 652e 696e 7075 7469 6e70  i.state.inputinp
+  - 0100320: 7574 3a00 1d03 1000 0600 0000 bf01 1000  ut:.............
+  - 0100330: 0100 0000 696e 7075 7420 7461 673a 2000  ....input tag: .
+  - 0100340: 3403 1000 0b00 0000 6363 7476 6835 6f70  4.......cctvh5op
+  - 0100350: 656e 6170 692e 7374 6174 652e 7473 7473  enapi.state.tsts
+  - 0100360: 2074 6167 3a20 0000 5e03 1000 0800 0000   tag: ..^.......
+  - 0100370: 0100 0000 0000 0000 746f 6b65 6e5f 726e  ........token_rn
+  - 0100380: 643b 726e 6420 696e 7075 743a 2000 0000  d;rnd input: ...
+  - 0100390: 8203 1000 0b00 0000 6f75 7470 7574 2072  ........output r
+  - 01003a0: 6e64 3a20 9803 1000 0c00 0000 6d64 3520  nd: ........md5 
+  - 01003b0: 696e 7075 743a 2000 ac03 1000 0b00 0000  input: .........
+  - 01003c0: 6f75 7470 7574 2073 6967 6e61 7475 7265  output signature
+  - 01003d0: 3a20 0000 c003 1000 12                   : .......
+ - segment[1] memory=0 size=353 - init i32=1049572
+  - 01003e4: 0100 0000 0300 0000 6361 6e6e 6f74 2061  ........cannot a
+  - 01003f4: 6363 6573 7320 6120 5468 7265 6164 204c  ccess a Thread L
+  - 0100404: 6f63 616c 2053 746f 7261 6765 2076 616c  ocal Storage val
+  - 0100414: 7565 2064 7572 696e 6720 6f72 2061 6674  ue during or aft
+  - 0100424: 6572 2064 6573 7472 7563 7469 6f6e 2f55  er destruction/U
+  - 0100434: 7365 7273 2f77 616e 6773 686f 756d 696e  sers/wangshoumin
+  - 0100444: 672f 2e72 7573 7475 702f 746f 6f6c 6368  g/.rustup/toolch
+  - 0100454: 6169 6e73 2f73 7461 626c 652d 6161 7263  ains/stable-aarc
+  - 0100464: 6836 342d 6170 706c 652d 6461 7277 696e  h64-apple-darwin
+  - 0100474: 2f6c 6962 2f72 7573 746c 6962 2f73 7263  /lib/rustlib/src
+  - 0100484: 2f72 7573 742f 6c69 6272 6172 792f 7374  /rust/library/st
+  - 0100494: 642f 7372 632f 7468 7265 6164 2f6c 6f63  d/src/thread/loc
+  - 01004a4: 616c 2e72 7300 0000 3204 1000 7700 0000  al.rs...2...w...
+  - 01004b4: 1001 0000 1a00 0000 0400 0000 2f55 7365  ............/Use
+  - 01004c4: 7273 2f77 616e 6773 686f 756d 696e 672f  rs/wangshouming/
+  - 01004d4: 2e63 6172 676f 2f72 6567 6973 7472 792f  .cargo/registry/
+  - 01004e4: 7372 632f 696e 6465 782e 6372 6174 6573  src/index.crates
+  - 01004f4: 2e69 6f2d 3139 3439 6366 3863 3662 3562  .io-1949cf8c6b5b
+  - 0100504: 3535 3766 2f77 6173 6d2d 6269 6e64 6765  557f/wasm-bindge
+  - 0100514: 6e2d 302e 322e 3933 2f73 7263 2f63 6f6e  n-0.2.93/src/con
+  - 0100524: 7665 7274 2f73 6c69 6365 732e 7273 0000  vert/slices.rs..
+  - 0100534: c004 1000 7200 0000 e000 0000 0100 0000  ....r...........
+  - 0100544: 80                                       .
+ - segment[2] memory=0 size=721 - init i32=1049988
+  - 0100584: 0100 0000 0000 0000 2f72 7573 7463 2f34  ......../rustc/4
+  - 0100594: 6562 3136 3132 3530 6533 3430 6338 6634  eb161250e340c8f4
+  - 01005a4: 3866 3636 6532 6239 3239 6566 3461 3562  8f66e2b929ef4a5b
+  - 01005b4: 6564 3763 3138 312f 6c69 6272 6172 792f  ed7c181/library/
+  - 01005c4: 616c 6c6f 632f 7372 632f 7374 7269 6e67  alloc/src/string
+  - 01005d4: 2e72 7300 8c05 1000 4b00 0000 8d05 0000  .rs.....K.......
+  - 01005e4: 1b00 0000 2f72 7573 7463 2f34 6562 3136  ..../rustc/4eb16
+  - 01005f4: 3132 3530 6533 3430 6338 6634 3866 3636  1250e340c8f48f66
+  - 0100604: 6532 6239 3239 6566 3461 3562 6564 3763  e2b929ef4a5bed7c
+  - 0100614: 3138 312f 6c69 6272 6172 792f 616c 6c6f  181/library/allo
+  - 0100624: 632f 7372 632f 7261 775f 7665 632e 7273  c/src/raw_vec.rs
+  - 0100634: e805 1000 4c00 0000 2802 0000 1100 0000  ....L...(.......
+  - 0100644: 0800 0000 0c00 0000 0400 0000 0900 0000  ................
+  - 0100654: 0a00 0000 0b00 0000 2f72 7573 742f 6465  ......../rust/de
+  - 0100664: 7073 2f64 6c6d 616c 6c6f 632d 302e 322e  ps/dlmalloc-0.2.
+  - 0100674: 372f 7372 632f 646c 6d61 6c6c 6f63 2e72  7/src/dlmalloc.r
+  - 0100684: 7361 7373 6572 7469 6f6e 2066 6169 6c65  sassertion faile
+  - 0100694: 643a 2070 7369 7a65 203e 3d20 7369 7a65  d: psize >= size
+  - 01006a4: 202b 206d 696e 5f6f 7665 7268 6561 6400   + min_overhead.
+  - 01006b4: 5c06 1000 2900 0000 a804 0000 0900 0000  \...)...........
+  - 01006c4: 6173 7365 7274 696f 6e20 6661 696c 6564  assertion failed
+  - 01006d4: 3a20 7073 697a 6520 3c3d 2073 697a 6520  : psize <= size 
+  - 01006e4: 2b20 6d61 785f 6f76 6572 6865 6164 0000  + max_overhead..
+  - 01006f4: 5c06 1000 2900 0000 ae04 0000 0d00 0000  \...)...........
+  - 0100704: 4163 6365 7373 4572 726f 726d 656d 6f72  AccessErrormemor
+  - 0100714: 7920 616c 6c6f 6361 7469 6f6e 206f 6620  y allocation of 
+  - 0100724: 2062 7974 6573 2066 6169 6c65 6400 0000   bytes failed...
+  - 0100734: 0f07 1000 1500 0000 2407 1000 0d00 0000  ........$.......
+  - 0100744: 6c69 6272 6172 792f 7374 642f 7372 632f  library/std/src/
+  - 0100754: 616c 6c6f 632e 7273 4407 1000 1800 0000  alloc.rsD.......
+  - 0100764: 6301 0000 0900 0000 0800 0000 0c00 0000  c...............
+  - 0100774: 0400 0000 0c00 0000 0000 0000 0800 0000  ................
+  - 0100784: 0400 0000 0d00 0000 0000 0000 0800 0000  ................
+  - 0100794: 0400 0000 0e00 0000 0f00 0000 1000 0000  ................
+  - 01007a4: 1100 0000 1200 0000 1000 0000 0400 0000  ................
+  - 01007b4: 1300 0000 1400 0000 1500 0000 1600 0000  ................
+  - 01007c4: 4572 726f 7200 0000 1700 0000 0c00 0000  Error...........
+  - 01007d4: 0400 0000 1800 0000 1900 0000 1a00 0000  ................
+  - 01007e4: 6361 7061 6369 7479 206f 7665 7266 6c6f  capacity overflo
+  - 01007f4: 7700 0000 e407 1000 1100 0000 6c69 6272  w...........libr
+  - 0100804: 6172 792f 616c 6c6f 632f 7372 632f 7261  ary/alloc/src/ra
+  - 0100814: 775f 7665 632e 7273 0008 1000 1c00 0000  w_vec.rs........
+  - 0100824: 2802 0000 1100 0000 6c69 6272 6172 792f  (.......library/
+  - 0100834: 616c 6c6f 632f 7372 632f 7374 7269 6e67  alloc/src/string
+  - 0100844: 2e72 7300 2c08 1000 1b00 0000 ea01 0000  .rs.,...........
+  - 0100854: 17                                       .
+ - segment[3] memory=0 size=377 - init i32=1050720
+  - 0100860: 0100 0000 1b00 0000 6120 666f 726d 6174  ........a format
+  - 0100870: 7469 6e67 2074 7261 6974 2069 6d70 6c65  ting trait imple
+  - 0100880: 6d65 6e74 6174 696f 6e20 7265 7475 726e  mentation return
+  - 0100890: 6564 2061 6e20 6572 726f 7220 7768 656e  ed an error when
+  - 01008a0: 2074 6865 2075 6e64 6572 6c79 696e 6720   the underlying 
+  - 01008b0: 7374 7265 616d 2064 6964 206e 6f74 6c69  stream did notli
+  - 01008c0: 6272 6172 792f 616c 6c6f 632f 7372 632f  brary/alloc/src/
+  - 01008d0: 666d 742e 7273 0000 be08 1000 1800 0000  fmt.rs..........
+  - 01008e0: 8a02 0000 0e00 0000 2c08 1000 1b00 0000  ........,.......
+  - 01008f0: 8d05 0000 1b00 0000 3a20 0000 0100 0000  ........: ......
+  - 0100900: 0000 0000 f808 1000 0200 0000 7d20 7d30  ............} }0
+  - 0100910: 7830 3030 3130 3230 3330 3430 3530 3630  x000102030405060
+  - 0100920: 3730 3830 3931 3031 3131 3231 3331 3431  7080910111213141
+  - 0100930: 3531 3631 3731 3831 3932 3032 3132 3232  5161718192021222
+  - 0100940: 3332 3432 3532 3632 3732 3832 3933 3033  3242526272829303
+  - 0100950: 3133 3233 3333 3433 3533 3633 3733 3833  1323334353637383
+  - 0100960: 3934 3034 3134 3234 3334 3434 3534 3634  9404142434445464
+  - 0100970: 3734 3834 3935 3035 3135 3235 3335 3435  7484950515253545
+  - 0100980: 3535 3635 3735 3835 3936 3036 3136 3236  5565758596061626
+  - 0100990: 3336 3436 3536 3636 3736 3836 3937 3037  3646566676869707
+  - 01009a0: 3137 3237 3337 3437 3537 3637 3737 3837  1727374757677787
+  - 01009b0: 3938 3038 3138 3238 3338 3438 3538 3638  9808182838485868
+  - 01009c0: 3738 3838 3939 3039 3139 3239 3339 3439  7888990919293949
+  - 01009d0: 3539 3639 3739 3839 39                   596979899
+Custom:
+ - name: "producers"
+Custom:
+ - name: "target_features"
+  - [+] mutable-globals
+  - [+] sign-ext
+  - [+] reference-types
+  - [+] multivalue

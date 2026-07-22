@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang=en><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=icon href=https://sapi.yangshipin.cn/assets/2022/pcicon/favicon.ico><link rel=stylesheet href="https://sapi.yangshipin.cn/assets/2022/ysp_account/yspLogin.css?t=240723"><link href=https://m.yangshipin.cn/static/project/test/player/vr/index.css rel=stylesheet type=text/css><title>央视频 - 有品质的视频社交媒体</title><script src=https://s.yangshipin.cn/CCTVVideo/CCTVVideoAssets/v11/js/zepto.min.js></script><script src="https://s.yangshipin.cn/CCTVVideo/cctvh5-openapi/cctvh5-openapi.min.js?ver=24722" crossorigin=anonymous></script><script src=//s.yangshipin.cn/CCTVVideo/cctvh5-trace/cctvh5-trace.min.js crossorigin=anonymous></script><script src=//s.yangshipin.cn/CCTVVideo/CCTVVideoAssets/v1/js/vconsole.min.js crossorigin=anonymous></script><script src="https://sapi.yangshipin.cn/assets/2022/ysp_account/yspLogin.min.js?ver=240723"></script><script src=https://sapi.yangshipin.cn/assets/2024/wasm/RJq7sO71JF.js></script><script src="https://sapi.yangshipin.cn/assets/2025/wasm/hls.cmg.js?ver=250813"></script><script src="https://sapi.yangshipin.cn/assets/2025/wasm/cmg.worker.js?ver=250813"></script><script src="https://m.yangshipin.cn/static/project/test/player/vr/index.js?t=210"></script><script>function isMobile() {
+          let flag = navigator.userAgent.match(/(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i)
+          return flag;
+      }
+      function getUrlParams(url) {
+        let urlStr = url.split('?')[1]
+        let obj = {}
+        if (!urlStr) {
+          return ''
+        }
+        let paramsArr = urlStr.split('&')
+        for (let i = 0; i < paramsArr.length; i++) {
+          let arr = paramsArr[i].split('=')
+          obj[arr[0]] = arr[1]
+        }
+        return obj
+      }
+      let pcurl = window.location.href
+      // 正式发布需要放开
+      // if(pcurl.indexOf('test=on') > 0 || pcurl.indexOf('prerelease=on') > 0) {
+      //   window.location.replace('http://www.yangshipin.cn')
+      // }
+      if(isMobile()){
+        let url = window.location.href
+        let obj = getUrlParams(url)
+        let vid = obj['vid']
+        let cid = obj['cid']
+        let pid = obj['pid']
+        let channel = obj['channel'] || ''
+        let channel_origin = obj['channel_origin'] || ''
+        if (!obj) {
+          window.location.replace("https://m.yangshipin.cn/static/m/")
+        } else if (url.indexOf('video/home') > 0 && vid) {
+          // 跳转点播页
+          if (cid) {
+            window.location.replace('https://m.yangshipin.cn/video?type=0&vid=' + vid + '&cid=' + cid + '&channel=' + channel + '&channel_origin=' + channel_origin)
+          } else {
+            window.location.replace('https://m.yangshipin.cn/video?type=0&vid=' + vid + '&channel=' + channel + '&channel_origin=' + channel_origin)
+          }
+        } else if (url.indexOf('live/detail') > 0 && pid) {
+          // 跳转直播页
+          window.location.replace('https://m.yangshipin.cn/video?type=2&pid=' + pid + '&channel=' + channel + '&channel_origin=' + channel_origin)
+        } else {
+          if (channel || channel_origin) {
+            window.location.replace("https://m.yangshipin.cn/static/m/?channel=" + channel + '&channel_origin=' + channel_origin)
+          } else {
+            window.location.replace("https://m.yangshipin.cn/static/m/")
+          }
+        }
+      }
+      // if(location.href.indexOf("https://yangshipin.cn") > -1){
+      //   window.location.replace("https://www.yangshipin.cn")
+      // }
+      // if(location.href.indexOf("http://yangshipin.cn") > -1){
+      //   window.location.replace("http://www.yangshipin.cn")
+      // }
+      !(function() {
+      	// vConsole
+      	if (window.VConsole && !window.vConsole && window.location.href.indexOf('vconsole=on') > 0) {
+      		window.vConsole = new window.VConsole()
+      	}
+
+      	// Trace
+      	var Trace = window["cctvh5-trace"].default;
+      	Trace.init({
+      		action: {
+      			BossId: "8185",
+      			Pwd: "1785021360"
+      		}
+      	});
+      })();</script><link href=/css/chunk-07626941.58d8209b.css rel=prefetch><link href=/css/chunk-148d219a.800a6398.css rel=prefetch><link href=/css/chunk-1522e18e.f3b7bd16.css rel=prefetch><link href=/css/chunk-16ddcf34.be375933.css rel=prefetch><link href=/css/chunk-1893cc98.05812a78.css rel=prefetch><link href=/css/chunk-18eeafe6.f8a99bc0.css rel=prefetch><link href=/css/chunk-1fbb0408.bde49d3e.css rel=prefetch><link href=/css/chunk-2084e235.835bdd0b.css rel=prefetch><link href=/css/chunk-256e347e.d740efac.css rel=prefetch><link href=/css/chunk-2f54d17e.5232a277.css rel=prefetch><link href=/css/chunk-36843bd3.588166d1.css rel=prefetch><link href=/css/chunk-39c6eb75.c9b15690.css rel=prefetch><link href=/css/chunk-4b502e2e.4b2bc2e7.css rel=prefetch><link href=/css/chunk-53cd7940.f8a99bc0.css rel=prefetch><link href=/css/chunk-540e33db.a4286d8c.css rel=prefetch><link href=/css/chunk-54bd828c.97432cee.css rel=prefetch><link href=/css/chunk-643756c8.081e0554.css rel=prefetch><link href=/css/chunk-65dd4922.e765ddd6.css rel=prefetch><link href=/css/chunk-676e57b6.1e682cec.css rel=prefetch><link href=/css/chunk-69f7abe1.00f30c46.css rel=prefetch><link href=/css/chunk-69f7e07e.e501987b.css rel=prefetch><link href=/css/chunk-71d9f9a0.6a6f8d67.css rel=prefetch><link href=/css/chunk-789c4a40.e5666ba9.css rel=prefetch><link href=/css/chunk-7c431587.bade4b8f.css rel=prefetch><link href=/css/chunk-7c88a2bc.9428b7e4.css rel=prefetch><link href=/css/chunk-ae1453e4.cd4f6a68.css rel=prefetch><link href=/css/chunk-b26c5dda.f8a99bc0.css rel=prefetch><link href=/css/chunk-b5b4b7f6.fd2cdc27.css rel=prefetch><link href=/css/chunk-bbe8bb7a.c9944af3.css rel=prefetch><link href=/css/chunk-dc5165bc.0e165b3b.css rel=prefetch><link href=/css/chunk-f7dcd48a.563ee8c1.css rel=prefetch><link href=/js/chunk-07626941.24441c8a.js rel=prefetch><link href=/js/chunk-148d219a.32670fdb.js rel=prefetch><link href=/js/chunk-1522e18e.b0530126.js rel=prefetch><link href=/js/chunk-16ddcf34.6e789a04.js rel=prefetch><link href=/js/chunk-1893cc98.46bab5ad.js rel=prefetch><link href=/js/chunk-18eeafe6.a8e9316b.js rel=prefetch><link href=/js/chunk-1fbb0408.e936d30b.js rel=prefetch><link href=/js/chunk-2084e235.daf67c3e.js rel=prefetch><link href=/js/chunk-256e347e.bca89640.js rel=prefetch><link href=/js/chunk-2f54d17e.d5c40ada.js rel=prefetch><link href=/js/chunk-36843bd3.0bbfcb1a.js rel=prefetch><link href=/js/chunk-39c6eb75.ac4df0ad.js rel=prefetch><link href=/js/chunk-4b502e2e.80678d35.js rel=prefetch><link href=/js/chunk-53cd7940.9a89bd1a.js rel=prefetch><link href=/js/chunk-540e33db.c7412cb2.js rel=prefetch><link href=/js/chunk-54bd828c.0f7635f5.js rel=prefetch><link href=/js/chunk-643756c8.10ba389b.js rel=prefetch><link href=/js/chunk-65dd4922.4a081a90.js rel=prefetch><link href=/js/chunk-676e57b6.2e3e1313.js rel=prefetch><link href=/js/chunk-69f7abe1.df08a655.js rel=prefetch><link href=/js/chunk-69f7e07e.e1c196db.js rel=prefetch><link href=/js/chunk-71d9f9a0.84c1ff01.js rel=prefetch><link href=/js/chunk-789c4a40.645fe750.js rel=prefetch><link href=/js/chunk-7c431587.b0290ba7.js rel=prefetch><link href=/js/chunk-7c88a2bc.dcb37caa.js rel=prefetch><link href=/js/chunk-ae1453e4.88bac6ed.js rel=prefetch><link href=/js/chunk-b26c5dda.fa0ceb19.js rel=prefetch><link href=/js/chunk-b5b4b7f6.c7275069.js rel=prefetch><link href=/js/chunk-bbe8bb7a.63966bb3.js rel=prefetch><link href=/js/chunk-dc5165bc.8b229abe.js rel=prefetch><link href=/js/chunk-f3abcb72.e750c868.js rel=prefetch><link href=/js/chunk-f7dcd48a.9fc8e1b3.js rel=prefetch><link href=/css/app.8a6fd8f3.css rel=preload as=style><link href=/css/chunk-vendors.0b2ff811.css rel=preload as=style><link href=/js/app.aa260297.js rel=preload as=script><link href=/js/chunk-vendors.86ef4b5a.js rel=preload as=script><link href=/css/chunk-vendors.0b2ff811.css rel=stylesheet><link href=/css/app.8a6fd8f3.css rel=stylesheet></head><body><div id=app></div><script src=/js/chunk-vendors.86ef4b5a.js></script><script src=/js/app.aa260297.js></script></body></html>
