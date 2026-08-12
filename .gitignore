@@ -18,8 +18,9 @@ cctv-proxy/cctv-proxy.exe
 # ===== Dependencies =====
 node_modules/
 
-# ===== Backups (compressed project snapshots) =====
+# ===== Backups / release packages (compressed project snapshots) =====
 *.rar
+/CCTVPlayer-release.zip
 
 # ===== Third-party toolchain (wabt binaries) =====
 wabt反编译工具/
