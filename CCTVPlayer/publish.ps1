@@ -12,7 +12,6 @@ $zipFile    = Join-Path $rootDir "CCTVPlayer-release.zip"
 
 # 1) 清理旧目录
 Remove-Item -Recurse -Force $publishDir -ErrorAction Ignore
-Remove-Item -Recurse -Force $releaseDir -ErrorAction Ignore
 Remove-Item -Force $zipFile -ErrorAction Ignore
 New-Item -ItemType Directory -Force $releaseDir | Out-Null
 
