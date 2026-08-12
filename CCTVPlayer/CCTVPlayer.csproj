@@ -19,6 +19,8 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <!-- 只包含中文资源，减小体积 -->
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+    <!-- 跳过 workload 包缺失检查（Android workload 已卸载） -->
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
   </PropertyGroup>
 
   <ItemGroup>
