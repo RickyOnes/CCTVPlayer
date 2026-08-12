@@ -170,7 +170,7 @@ func main() {
 	}
 	chromeIdx := 0
 
-	tryDial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+	tryDial := func(ctx context.Context, network, addr string, alpn []string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 		ips, err := resolver.LookupHost(ctx, host)
 		if err != nil {
@@ -191,6 +191,7 @@ func main() {
 		chromeIdx++
 		uconn := utls.UClient(tcpConn, &utls.Config{
 			ServerName: host,
+			NextProtos: alpn,
 		}, helloID)
 		if err := uconn.HandshakeContext(ctx); err != nil {
 			tcpConn.Close()
@@ -199,11 +200,11 @@ func main() {
 		return uconn, nil
 	}
 
-	// 先用 http2.Transport (HTTP/2)
+	// 先用 http2.Transport (HTTP/2, 需 ALPN 协商 h2)
 	clientH2 := &http.Client{
 		Transport: &http2.Transport{
 			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-				return tryDial(ctx, network, addr)
+				return tryDial(ctx, network, addr, []string{"h2"})
 			},
 		},
 	}
@@ -211,18 +212,28 @@ func main() {
 	clientH1 := &http.Client{
 		Transport: &http.Transport{
 			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return tryDial(ctx, network, addr)
+				return tryDial(ctx, network, addr, []string{"http/1.1"})
 			},
 		},
 	}
-	// ★ h1 直连 (CDN 实测不支持 h2, 用 h1 避免 h2 失败回退的延迟与噪声)
+	// ★ h2 优先 + h1 回退: 多数 CDN 走 h1, 但部分源(如 mobilelive-play.ysp.cctv.cn)
+	//   仅支持 HTTP/2, 用纯 h1 解析会报 "malformed HTTP response \x00\x00..." (h2 二进制帧)。
+	//   故先试 h2, 失败/非 200 再回退 h1, 与 /sapi、/ 代理保持一致。
 	fetchH1 := func(method, url string, body io.Reader, hdr http.Header) (*http.Response, error) {
-		req, err := http.NewRequest(method, url, body)
-		if err != nil {
-			return nil, err
+		do := func(c *http.Client) (*http.Response, error) {
+			req, e := http.NewRequest(method, url, body)
+			if e != nil {
+				return nil, e
+			}
+			setReqHeaders(req, hdr)
+			return c.Do(req)
 		}
-		setReqHeaders(req, hdr)
-		return clientH1.Do(req)
+		if resp, e := do(clientH2); e == nil {
+			// h2 连接成功即采用 (含 4xx/5xx, 让上层按状态码处理); 仅连接层错误回退 h1
+			return resp, nil
+		} else {
+			return do(clientH1)
+		}
 	}
 
 	// ★ 把 m3u8 里的相对 URI 解析成基于 m3u8 自身 URL 目录的绝对 CDN URL。
