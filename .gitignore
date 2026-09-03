@@ -48,12 +48,15 @@ Desktop.ini
 CctvPoC/build/
 CctvPoC/entry/build/
 CctvPoC/entry/namecache.json
-CctvPoC/entry/libs/          # leftover native .so (11MB, unreferenced by source)
+# leftover native .so (11MB, unreferenced by source)
+CctvPoC/entry/libs/
 CctvPoC/local.properties
-CctvPoC/signatures/          # signing keys (.p12 etc.) — never commit
+# signing keys (.p12 etc.) — never commit
+CctvPoC/signatures/
 CctvPoC/*.rar
-CctvPoC/.freebuff/           # IDE plugin data
-CctvPoC/.codegenie/          # AI-IDE metadata
+# IDE plugin data / AI-IDE metadata
+CctvPoC/.freebuff/
+CctvPoC/.codegenie/
 
 # ===== Project backups — local only, not for VCS =====
 /backup_*/
