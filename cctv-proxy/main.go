@@ -444,7 +444,7 @@ func main() {
   /* ★★ 调试日志已静默(0&&短路), 删除 0&& 即可恢复 ★★ */
   var PV = window.chrome && window.chrome.webview;
   function post(o){ try{ if(PV) PV.postMessage(o); }catch(e){} }
-  0&&post({log:'[EARLY] installed'});
+  post({log:'[EARLY] installed'});
   function A(a){return typeof a==='number'?a:(typeof a==='string'?('"'+a.slice(0,24)+'"'):(a&&a.length!==undefined?('['+a.length+']'):typeof a));}
   function memOf(mod){
     try{
@@ -733,7 +733,7 @@ func main() {
 			patched = strings.Replace(patched, cmgDecOld2, cmgDecNew2, -1)
 			// ★ 派发器探针: 记录 fG[0x909] 收到的每条命令/种子, 确认 InitPlayer 是否真的下发、jD(mediaTagId/ts) 与当时 location
 			const dispProbeOld = `jB[wk(0x909)]=function(jC,jD,jE){var wl=wk`
-			const dispProbeNew = `jB[wk(0x909)]=function(jC,jD,jE){try{if(window.chrome&&window.chrome.webview){var __jd=(typeof jD==='object'?(jD&&jD.length!==undefined?('['+jD.length+']'):(JSON.stringify(jD)||'').slice(0,120)):jD);var __loc=(self.location&&self.location.href)||'';0&&window.chrome.webview.postMessage({log:'[DISP] cmd='+jE+' jD='+__jd+' loc='+__loc.slice(0,90)});}}catch(e){}var wl=wk`
+			const dispProbeNew = `jB[wk(0x909)]=function(jC,jD,jE){try{if(window.chrome&&window.chrome.webview){var __jd=(typeof jD==='object'?(jD&&jD.length!==undefined?('['+jD.length+']'):(JSON.stringify(jD)||'').slice(0,120)):jD);var __loc=(self.location&&self.location.href)||'';window.chrome.webview.postMessage({log:'[DISP] cmd='+jE+' jD='+__jd+' loc='+__loc.slice(0,90)});}}catch(e){}var wl=wk`
 			if strings.Contains(patched, dispProbeOld) {
 				patched = strings.Replace(patched, dispProbeOld, dispProbeNew, -1)
 				// log.Printf("  [diag] 派发器探针已注入")
@@ -746,7 +746,7 @@ func main() {
 			//   说明分支体内某条语句抛异常被外层 catch(jN){} 静默吞掉。本版本把真实异常打出来,
 			//   并兜底 self['activeURL']/self[0x44c,0x466] 等可能为 undefined 的变量, 确保 wasm 调用必达。
 			const initBlockOld = `self[jG(0x0,0x0,0x452,0x466)]=self[jG(0x0,0x0,0x450,0x46a)]||self[jG(0x0,0x0,0x43a,0x44a)][jG(0x0,0x0,0x463,0x471)]||window[jG(0x0,0x0,0x432,0x44a)][jG(0x0,0x0,0x461,0x471)]||window[jG(0x0,0x0,0x46e,0x46e)][jG(0x0,0x0,0x43a,0x44a)]||window[wl(0xb1d)][jG(0x0,0x0,0x454,0x454)]||'',jI[jG(0x0,0x0,0x46c,0x46d)](self[jG(0x0,0x0,0x44c,0x466)]['indexOf'](jG(0x0,0x0,0x45f,0x45d)),0x0)&&(self[jG(0x0,0x0,0x479,0x466)]=self['activeURL'][jG(0x0,0x0,0x46e,0x483)](jG(0x0,0x0,0x45f,0x45d),'')),self[jG(0x0,0x0,0x465,0x473)+jG(0x0,0x0,0x490,0x46b)]=!0x1,self[jG(0x0,0x0,0x461,0x44b)]='',jH=jC[jG(0x0,0x0,0x47b,0x461)+jG(0x0,0x0,0x459,0x44f)](jK)`
-			const initBlockNew = `(function(){var __post=function(t){try{if(window.chrome&&window.chrome.webview)0&&window.chrome.webview.postMessage({log:t});}catch(e){}};try{0&&__post('[DISP-INIT-ENTER] InitPlayer case entered');}catch(e){}var __head=jG(0x0,0x0,0x450,0x46a);try{0&&__post('[DISP-INIT] head='+__head+' headVal='+(self[__head])+' activeURL='+(self['activeURL'])+' location='+(self.location&&self.location.href));}catch(e){}try{self[jG(0x0,0x0,0x465,0x473)+jG(0x0,0x0,0x490,0x46b)]=!0x1;}catch(e){}try{self[jG(0x0,0x0,0x461,0x44b)]='';}catch(e){}var __mn=jG(0x0,0x0,0x47b,0x461)+jG(0x0,0x0,0x459,0x44f);var __has=!!(jC&&typeof jC[__mn]==='function');var __r;try{__r=jC[__mn](jK);}catch(__e){try{0&&__post('[DISP-INIT] m='+__mn+' has='+__has+' THREW='+__e.message);}catch(_x){}throw __e;}try{0&&__post('[DISP-INIT] m='+__mn+' has='+__has+' ret='+__r);}catch(_x){}jH=__r;})()`
+			const initBlockNew = `(function(){var __post=function(t){try{if(window.chrome&&window.chrome.webview)window.chrome.webview.postMessage({log:t});}catch(e){}};try{__post('[DISP-INIT-ENTER] InitPlayer case entered');}catch(e){}var __head=jG(0x0,0x0,0x450,0x46a);try{__post('[DISP-INIT] head='+__head+' headVal='+(self[__head])+' activeURL='+(self['activeURL'])+' location='+(self.location&&self.location.href));}catch(e){}try{self[jG(0x0,0x0,0x465,0x473)+jG(0x0,0x0,0x490,0x46b)]=!0x1;}catch(e){}try{self[jG(0x0,0x0,0x461,0x44b)]='';}catch(e){}var __mn=jG(0x0,0x0,0x47b,0x461)+jG(0x0,0x0,0x459,0x44f);var __has=!!(jC&&typeof jC[__mn]==='function');var __r;try{__r=jC[__mn](jK);}catch(__e){try{__post('[DISP-INIT] m='+__mn+' has='+__has+' THREW='+__e.message);}catch(_x){}throw __e;}try{__post('[DISP-INIT] m='+__mn+' has='+__has+' ret='+__r);}catch(_x){}jH=__r;})()`
 			if strings.Contains(patched, initBlockOld) {
 				patched = strings.Replace(patched, initBlockOld, initBlockNew, -1)
 				// log.Printf("  [diag] DISP-INIT-BLOCK 已注入(InitPlayer 分支整体包裹+崩溃安全)")
@@ -771,7 +771,7 @@ func main() {
 		// ★ 改为按 body 内容匹配 (更稳健, 不依赖请求路径), 只要含 IndexedDB 门控串就注入。
 		if strings.Contains(string(body), "EM_IDB_STORE") {
 			const fetchGateOld = `if((!c||"EM_IDB_STORE"===r||"EM_IDB_DELETE"===r)&&!Fetch.dbInstance)return C(A),0;`
-			const fetchGateNew = `var __cmgRW=function(p){try{var u=UTF8ToString(p);if(/yangshipin\\.cn|cctv\\.cn/.test(u)&&u.indexOf('127.0.0.1')<0){var nu='http://127.0.0.1:18888/media?u='+encodeURIComponent(u);var b=[];for(var i=0;i<nu.length;i++)b.push(nu.charCodeAt(i));b.push(0);var np=_malloc(b.length);if(np){for(var j=0;j<b.length;j++)HEAPU8[np+j]=b[j];HEAPU32[p>>2]=np;return nu;}}}catch(e){}return null;};try{if(window.chrome&&window.chrome.webview){var __gu=HEAPU32[A+8>>2]?UTF8ToString(HEAPU32[A+8>>2]):'?';0&&window.chrome.webview.postMessage({log:'[FETCH-GATE] db='+(Fetch.dbInstance?1:0)+' r='+r+' c='+c+' u='+__gu.substring(0,160)});}}catch(_e){}if("EM_IDB_STORE"!==r&&"EM_IDB_DELETE"!==r){try{var __rw=__cmgRW(HEAPU32[A+8>>2]);if(window.chrome&&window.chrome.webview)0&&window.chrome.webview.postMessage({log:'[FETCH-FORCE] '+(__rw||__gu)});}catch(_e){}__emscripten_fetch_xhr(A,o,C,E,Q);return A}if((!c||"EM_IDB_STORE"===r||"EM_IDB_DELETE"===r)&&!Fetch.dbInstance)return C(A),0;`
+			const fetchGateNew = `var __cmgRW=function(p){try{var u=UTF8ToString(p);if(/yangshipin\\.cn|cctv\\.cn/.test(u)&&u.indexOf('127.0.0.1')<0){var nu='http://127.0.0.1:18888/media?u='+encodeURIComponent(u);var b=[];for(var i=0;i<nu.length;i++)b.push(nu.charCodeAt(i));b.push(0);var np=_malloc(b.length);if(np){for(var j=0;j<b.length;j++)HEAPU8[np+j]=b[j];HEAPU32[p>>2]=np;return nu;}}}catch(e){}return null;};try{if(window.chrome&&window.chrome.webview){var __gu=HEAPU32[A+8>>2]?UTF8ToString(HEAPU32[A+8>>2]):'?';window.chrome.webview.postMessage({log:'[FETCH-GATE] db='+(Fetch.dbInstance?1:0)+' r='+r+' c='+c+' u='+__gu.substring(0,160)});}}catch(_e){}if("EM_IDB_STORE"!==r&&"EM_IDB_DELETE"!==r){try{var __rw=__cmgRW(HEAPU32[A+8>>2]);if(window.chrome&&window.chrome.webview)window.chrome.webview.postMessage({log:'[FETCH-FORCE] '+(__rw||__gu)});}catch(_e){}__emscripten_fetch_xhr(A,o,C,E,Q);return A}if((!c||"EM_IDB_STORE"===r||"EM_IDB_DELETE"===r)&&!Fetch.dbInstance)return C(A),0;`
 			wp := strings.Replace(string(body), fetchGateOld, fetchGateNew, 1)
 			if wp != string(body) {
 				// log.Printf("  [diag] cmg.worker.js Fetch 门控已注入 (绕过 IndexedDB → 强制 XHR) path=%s", r.URL.Path)
@@ -784,13 +784,11 @@ func main() {
 		//   否则浏览器会命中旧版 (无注入) 的 cmg.worker.js/hls.cmg.js 缓存,
 		//   代理永远收不到请求, 注入的诊断代码永不生效。
 
-		// ★★★ 彻底注释 JS 内嵌的 postMessage 日志（所有调试输出）
-		patched := string(body)
-		// 短路所有直接调用 window.chrome.webview.postMessage
-		patched = strings.ReplaceAll(patched, "window.chrome.webview.postMessage", "0&&window.chrome.webview.postMessage")
-		// 短路所有 post({log: ...}) 调用（仅匹配以 post({log: 开头的）
-		patched = strings.ReplaceAll(patched, "post({log:", "0&&post({log:")
-		body = []byte(patched)
+		// ★★★ 日志还原 (2026-09-01 联调期):
+		//   此前的"全局静默"(postMessage → 0&&postMessage / post({log: → 0&&post({log:) 已删除。
+		//   诊断日志(CMGDEC/[CMG]/[FIX-PB]/[DISP]/[DISP-INIT]/[FETCH-GATE]/[EARLY])全部恢复输出,
+		//   由注入串内部的限流逻辑控制刷屏(帧日志上限 0x4B0、__wrap 每函数前 3 次等)。
+		//   联调结束后如需静默, 恢复本块即可(见 git 历史)。
 
 		if ct != "" {
 			w.Header().Set("Content-Type", ct)

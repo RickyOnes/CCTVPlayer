@@ -41,7 +41,7 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
   window.eval = function(s){
     // ★ 诊断: 记录 wasm .eval 的所有表达式(含非 location), 上限 300 条 (已静默)
     if (typeof s === 'string') {
-      try { if (_na < 300) { _na++; /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-ALL] '+s.substring(0,140)}); */ } } catch(e){}
+      try { if (_na < 300) { _na++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-ALL] '+s.substring(0,140)}); } } catch(e){}
     }
     if (typeof s === 'string' && /location/.test(s)) {
       try {
@@ -49,27 +49,29 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
         var fn = new Function('self','window','document','location','navigator','return (' + s + ');');
         var r = fn({location:fakeLoc}, {location:fakeLoc}, {location:fakeLoc}, fakeLoc, {});
         if (typeof r === 'string') {
-          // if (_n < 80) { _n++; try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF] '+s.substring(0,90)+' -> '+r}); } catch(e){} }
+          if (_n < 80) { _n++; try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF] '+s.substring(0,90)+' -> '+r}); } catch(e){} }
           return r;
         }
         // 非字符串结果: 强行用伪 location 重新拼一个字符串返回, 避免退回真实 eval 泄露 127.0.0.1
-        try { var r2 = String(r); /* if (_n < 80) { _n++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF-nonstr] '+s.substring(0,90)+' -> '+r2}); } */ return r2; } catch(e3){}
+        try { var r2 = String(r); if (_n < 80) { _n++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF-nonstr] '+s.substring(0,90)+' -> '+r2}); } return r2; } catch(e3){}
       } catch(e) {
-        // try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'[EVAL] 复合求值失败: '+s.substring(0,80)+' :: '+e.message}); } catch(e2){}
+        try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'[EVAL] 复合求值失败: '+s.substring(0,80)+' :: '+e.message}); } catch(e2){}
       }
     }
     return _eval.call(this, s);
   };
-  try { /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL] 域名锁 eval 劫持(鲁棒版)已安装'}); */ } catch(e){}
+  try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL] 域名锁 eval 劫持(鲁棒版)已安装'}); } catch(e){}
 })();
 </script>
 
-<!-- ★★★ 主线程 location 伪装 (覆盖派发器 fG[0x909] 的直读 self.location.href)
+<!-- ★★★ 主线程 location 伪装 (best-effort, 可全部失败)
      cmg.worker.js 作为主线程脚本加载, wasm 与派发器共享 self(=window)。
-     派发器 InitPlayer 分支直接读 self.location.href(不走 eval, 故 WEVAL 劫持覆盖不到),
-     把它拼成 URL 存进 self 全局, wasm 再读该全局作密钥种子。
-     主线程真实 href=http://127.0.0.1:18888/player → 种子错误 → 空密钥表 → 解密恒等(same=Y)。
-     此处把主线程 self.location 伪装成 yangshipin.cn, 使派发器拼出的 URL 正确。 -->
+     ⚠ 2026-08-31 重审更正: 下面 1)~3) 的 location 改写已被实证为无效且无必要 ——
+       Chromium 中 window.location / Location.prototype.href 均为不可配置访问器, 改写必然失败;
+       且 wasm 取 location 的唯一出口是 EM_ASM → eval(), 已被上面的 WEVAL 劫持覆盖。
+       而真正进入 wasm 内存的密钥种子是 self.activeURL(由 moduleDecData 每次解密写入),
+       见下方第 4) 步 —— 那才是必须做对的一步。
+     保留 1)~3) 仅为兼容/兜底, 失败不影响播放。 -->
 <script>
 (function(){
   var FAKE_HREF='https://yangshipin.cn/tv/home?pid=600001859';
@@ -98,14 +100,23 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
     Object.defineProperty(WP,'location',{get:function(){return fakeLoc;},configurable:true});
     steps.push('winproto-loc:ok');
   }catch(e){ steps.push('winproto-loc:FAIL'); }
-  // 4) 预置 activeURL: 派发器会 self['activeURL']=self['activeURL'].replace(...), 若未定义会抛错被吞 → 密钥不加载
-  try{ Object.defineProperty(window,'activeURL',{value:FAKE_HREF,configurable:true}); }catch(e){}
-  try{ Object.defineProperty(self,'activeURL',{value:FAKE_HREF,configurable:true}); }catch(e){}
+  // 4) ★★ 预置 activeURL (2026-09-01 实机联调修正 ★ 花屏根因)
+  //    【种子必须是完整 URL, 不得 replace!】
+  //    DISP-INIT-BLOCK(main.go 注入)替换了官方 InitPlayer 分支后, 跳过了官方的
+  //    "activeURL=location.href→replace 域名"两条赋值 —— 预置什么, wasm 拿到的种子就是什么。
+  //    git HEAD(可正常播放)的预置值 = FAKE_HREF 完整串(41字符, 带域名);
+  //    2026-08-31 曾改为 replace 后的 30 字符短串 → 密钥派生输入改变 → 全帧花屏。
+  //    (moduleDecData 每次解密把 self.activeURL 的 charCodes 追加进 wasm 内存参与派生)
+  //    writable:true 保留: DISP-INIT-BLOCK 与 moduleDecData 均不写该属性, 写权限兜底无害。
+  try{ Object.defineProperty(window,'activeURL',{value:FAKE_HREF,configurable:true,writable:true}); }catch(e){}
+  try{ Object.defineProperty(self  ,'activeURL',{value:FAKE_HREF,configurable:true,writable:true}); }catch(e){}
+  try{ window.activeURL = FAKE_HREF; }catch(e){}
+  try{ self.activeURL   = FAKE_HREF; }catch(e){}
   try{ Object.defineProperty(document,'URL',{value:FAKE_HREF,configurable:true}); }catch(e){}
   // 5) 生效验证: 必须回读确认 self.location.href 真的变成 FAKE, 不再假成功
   var nowHref=(self.location&&self.location.href)||'(null)';
   var verified=(nowHref===FAKE_HREF);
-  // if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[LOC-SPOOF] steps=['+steps.join(',')+'] verified='+verified+' now='+nowHref});
+  if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[LOC-SPOOF] steps=['+steps.join(',')+'] verified='+verified+' now='+nowHref});
 })();
 </script>
 
@@ -152,32 +163,123 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
 })();
 </script>
 
-<!-- CMG 解密播放器 (经本地代理 /sapi 同源加载, 避免跨域 Worker 限制) -->
-<script src="/sapi/assets/2025/wasm/cmg.worker.js?ver=250813"></script>
-<script src="/sapi/assets/2025/wasm/hls.cmg.js?ver=250813"></script>
-
-<!-- ★ CMG 解密 wasm 模块初始化:
-     cmg.worker.js 作为主线程脚本加载, 暴露全局工厂函数 CMGDecModule (内嵌 wasm, 可离线实例化)。
-     复刻官方 liveInit 的时序: o=CMGDecModule(); window.CNTVH5PlayerModule=o; 等 onRuntimeInitialized 后播放。
-     hls.cmg.js 的 demux (jC 构造器) 直接读取全局 CNTVH5PlayerModule, 未定义即 ReferenceError。 -->
+<!-- CMG slim 解密层 (2026-09-01 实机联调): eb_prog(378KB)+reloc(40KB) fetch 注入 → cmg.slim.js(184KB) 动态加载
+     替代 cmg.worker.js(1.30MB): VM 字节码不再以 110 万字符十进制数组内嵌, 加载体积省 ~85%。
+     等价性已验证 (rev/verify_slim.cjs): eb 区域与官方运行时内存逐字节零差异。
+     时序: 注入 __CMG_EB_RAW__/__CMG_EB_RELOC__ → 动态 script cmg.slim.js
+     → slim 在 initRuntime 首部同步写 eb_prog 并按表重定位(必在 globalCtors 之前) → CMGDecModule 就绪。
+     ★ 不能用 __ATPRERUN__.push 挂载(wasm data URI 同步实例化, 注册晚于消费, 回调永不执行)——已在 Node 实证。 -->
 <script>
 (function(){
-  try {
-    if (typeof CMGDecModule === 'undefined') {
-      if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'CMGDecModule 未定义 (cmg.worker.js 未加载?)'});
-      return;
-    }
-    window.CNTVH5PlayerModule = CMGDecModule();
-    window.CNTVH5PlayerModule.onRuntimeInitialized = function(){
-      window.__cmgReady = true;
-      /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[CMG] wasm 解密模块就绪'}); */
-    };
-    /* if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[CMG] CNTVH5PlayerModule 已实例化, 等待 wasm 就绪'}); */
-  } catch(e) {
-    if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'CMG 实例化失败: '+e.message});
+  var BASE='/sapi/assets/2025/wasm/';
+  function post(m){ try{ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage(m); }catch(e){} }
+  function boot(){
+    if (typeof CMGDecModule === 'undefined') { post({err:'[slim] CMGDecModule 未定义'}); return; }
+    try {
+      window.CNTVH5PlayerModule = CMGDecModule();
+      window.CNTVH5PlayerModule.onRuntimeInitialized = function(){
+        window.__cmgReady = true;
+        // ★ 校验 eb_prog 已正确写入并完成重定位:
+        //   官方(重定位后) eb 区域前 16 字节 = 8c 06 75 00 00 00 00 00 02 65 00 00 60 90 80 0c
+        //   (未重定位的 raw 值不同, 若匹配 raw 则说明重定位未执行)
+        var __ebOk='?', __head='';
+        try {
+          var __mod=window.CNTVH5PlayerModule;
+          var __ebPtr=(globalThis.__SLIM_DBG__&&globalThis.__SLIM_DBG__.eb)||null;
+          if (__mod&&__mod.HEAPU8&&__ebPtr) {
+            var __h16=Array.prototype.map.call(__mod.HEAPU8.subarray(__ebPtr,__ebPtr+16),function(x){return('0'+x.toString(16)).slice(-2)}).join('');
+            __head=__h16;
+            __ebOk=(__h16==='8c06750000000000026500006090800c')?'OK':'MISMATCH';
+          }
+        } catch(e){ __ebOk='ERR '+e.message; }
+        post({log:'[slim] wasm 就绪 eb_prog='+((globalThis.__CMG_EB_RAW__&&globalThis.__CMG_EB_RAW__.length)||0)+'B reloc='+((globalThis.__CMG_EB_RELOC__&&globalThis.__CMG_EB_RELOC__.length)||0)+'项 ebHead='+__ebOk+(__ebOk==='MISMATCH'?('('+__head+')'):'')});
+
+        // ★ 联调: hook InitPlayer, dump 返回的内部状态指针内容
+        try {
+          var __mod4=window.CNTVH5PlayerModule;
+          var __oi=__mod4._CMG_InitPlayer;
+          if (typeof __oi==='function' && !__mod4.__INIT_HOOKED__) {
+            __mod4.__INIT_HOOKED__=1;
+            __mod4._CMG_InitPlayer=function(a){
+              var r=__oi.apply(this,arguments);
+              try{
+                var H=__mod4.HEAPU8;
+                var __dump=[];
+                if (r && r>0) { for(var i=0;i<64;i++) __dump.push(H[r+i]); }
+                post({log:'[INITDB] ret='+r+' ('+(r>>>0).toString(16)+') state@dump='+__dump.join(',')+' evalLog='+JSON.stringify(globalThis.__EVAL_LOG__||[])});
+              }catch(e){ post({log:'[INITDB-ERR] '+e.message}); }
+              return r;
+            };
+            post({log:'[INITDB] hook 已安装'});
+          }
+        } catch(e){ post({log:'[INITDB-ERR] '+e.message}); }
+        // ★ 联调: hook UpdatePlayer 返回值序列
+        try {
+          var __mod3=window.CNTVH5PlayerModule;
+          var __ou=__mod3._CMG_UpdatePlayer;
+          if (typeof __ou==='function' && !__mod3.__UP_HOOKED__) {
+            __mod3.__UP_HOOKED__=1;
+            __mod3._CMG_UpdatePlayer=function(a){
+              var r=__ou.apply(this,arguments);
+              try{
+                post({log:'[UPDB] ret='+r+' ('+r.toString(16)+') t='+(Date.now()%100000)+' vmpTag='+JSON.stringify(self.vmpTag)+' tagId@='+a});
+              }catch(e){}
+              return r;
+            };
+            post({log:'[UPDB] hook 已安装'});
+          }
+        } catch(e){ post({log:'[UPDB-ERR] '+e.message}); }
+        // ★ 联调: hook jsdecLive8, dump 输入/输出/vmpTag 金标准 (仅限诊断, 验证后移除)
+        try {
+          var __mod2=window.CNTVH5PlayerModule;
+          var __od=__mod2._CMG_jsdecLive8;
+          if (typeof __od==='function' && !__mod2.__DBG_HOOKED__) {
+            __mod2.__DBG_HOOKED__=1;
+            __mod2._CMG_jsdecLive8=function(a,b,c,d){
+              var __before = b && b>0 && __mod2.HEAPU8 ? Array.prototype.slice.call(__mod2.HEAPU8.subarray(b, b+Math.min(c,48))) : null;
+              var r=__od.apply(this,arguments);
+              try{
+                var H=__mod2.HEAPU8;
+                var __after = b && b>0 ? Array.prototype.slice.call(H.subarray(b, b+Math.min(c,48))) : null;
+                var __same = __before && __after ? __before.every(function(v,i){return v===__after[i];}) : null;
+                var hx = function(a){return a.map(function(x){return('0'+x.toString(16)).slice(-2)}).join('');};
+                // ★ 决定性: 把输入复制到新 buffer, 用同一 tagId 再次调用, 验证解密确定性与 wasm 状态
+                var __replay='n/a';
+                try {
+                  var __nb2=__mod2._jsmalloc(c+8);
+                  H.set(H.subarray(b,b+c), __nb2);
+                  var __b2=Array.prototype.slice.call(H.subarray(__nb2,__nb2+Math.min(c,48)));
+                  var __r2=__od(__nb2,__nb2,c,d);
+                  var __a2=Array.prototype.slice.call(H.subarray(__nb2,__nb2+Math.min(c,48)));
+                  var __same2=__b2.every(function(v,i){return v===__a2[i];});
+                  __replay='ret2='+__r2+' SAME48_2='+__same2+' out2='+hx(__a2);
+                  __mod2._jsfree(__nb2);
+                } catch(e){ __replay='EX '+e.message; }
+                var __tag=''; 
+                try { for(var __t=a; H[__t]!==0 && __tag.length<40; __t++) __tag+=String.fromCharCode(H[__t]); } catch(e){}
+                post({log:'[JSDEB] ret='+r+' TAG='+JSON.stringify(__tag)+' jQ='+a+' jN='+b+' jM='+c+' jL='+d+' vmpTag='+JSON.stringify(self.vmpTag)+' SAME48='+__same+' in='+(__before?hx(__before):'-')+' out='+(__after?hx(__after):'-')+' || REPLAY: '+__replay});
+              }catch(e){}
+              return r;
+            };
+            post({log:'[JSDEB] hook 已安装'});
+          }
+        } catch(e){ post({log:'[JSDEB-ERR] '+e.message}); }
+      };
+    } catch(e) { post({err:'[slim] CMG 实例化失败: '+e.message}); }
   }
+  Promise.all([
+    fetch(BASE+'eb_prog.bin?ver=slim1').then(function(r){ if(!r.ok) throw new Error('eb_prog HTTP '+r.status); return r.arrayBuffer(); }),
+    fetch(BASE+'reloc_table.bin?ver=slim1').then(function(r){ if(!r.ok) throw new Error('reloc HTTP '+r.status); return r.arrayBuffer(); })
+  ]).then(function(rs){
+    globalThis.__CMG_EB_RAW__ = new Uint8Array(rs[0]);
+    globalThis.__CMG_EB_RELOC__ = new Uint32Array(rs[1]);
+    var s=document.createElement('script'); s.src=BASE+'cmg.slim.js?ver=slim1';
+    s.onload=boot; s.onerror=function(){ post({err:'[slim] cmg.slim.js 加载失败'}); };
+    document.head.appendChild(s);
+  }).catch(function(e){ post({err:'[slim] 资产注入失败: '+e.message}); });
 })();
 </script>
+<script src="/sapi/assets/2025/wasm/hls.cmg.js?ver=250813"></script>
 
 <!-- WASM_BASE64 -->
 <!-- CKEY_CORE -->
@@ -382,11 +484,11 @@ function installKeyTableProbe(mod){
     var H=getHeap();
     if(H){cb(H);return;}
     if(tries++<60) setTimeout(function(){waitHeap(cb);},100);
-    else /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] HEAPU8 不可用'}) */;
+    else if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] HEAPU8 不可用'});
   }
   waitHeap(function(H){
     var S1=snap(H);
-    /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] S1 len='+S1.length}); */
+    if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] S1 len='+S1.length});
     setTimeout(function(){
       var Sa=snap(H);
       setTimeout(function(){
@@ -400,7 +502,7 @@ function installKeyTableProbe(mod){
           var chg=false; for(var k=0;k<BLK;k++){ if(Sa[off+k]!==S1[off+k]){chg=true;break;} }
           if(chg && nz) cand.push(off.toString(16)+':'+hex(Sa,off,32));
         }
-        /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] 非零块='+nzSa+' 候选密钥块='+cand.length+' 样本='+cand.slice(0,15).join(' | ')}); */
+        if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[KTBL] 非零块='+nzSa+' 候选密钥块='+cand.length+' 样本='+cand.slice(0,15).join(' | ')});
       }, 4000);
     }, 2000);
   });
@@ -410,7 +512,17 @@ function installKeyTableProbe(mod){
 window.__startM3u8 = function(url) {
     if (hls) { try { hls.destroy(); } catch(e){}; hls = null; }
     if (typeof Hls==='undefined'||!Hls.isSupported()){show('Hls不支持');return}
-    if (typeof window.CNTVH5PlayerModule === 'undefined'){show('CMG 解密模块未初始化');return}
+    // ★ slim 版 CMG 模块为异步加载(fetch 注入→动态script→wasm实例化), 秒选频道时可能未就绪:
+    //   轮询等待至多 10s, 就绪后重入本函数。
+    if (typeof window.CNTVH5PlayerModule === 'undefined'){
+      show('等待解密模块...');
+      var __wn=0;
+      var __wiv=setInterval(function(){
+        if (window.CNTVH5PlayerModule){ clearInterval(__wiv); window.__startM3u8(url); }
+        else if (++__wn>100){ clearInterval(__wiv); show('CMG 解密模块加载超时'); }
+      },100);
+      return;
+    }
     var mod = window.CNTVH5PlayerModule;
     // ★ 媒体请求由页面顶部安装的 [net] 网络拦截统一改写到 /media 代理
     //   (保留 CMG 自带 loader, 不破坏 TS 解密逻辑; 不再额外诊断抓取, 避免消耗 m3u8 单次签名)
@@ -436,8 +548,8 @@ window.__startM3u8 = function(url) {
             var mt=hls.config&&hls.config.mediaTagId;
             var lv=(data&&data.levels&&data.levels[0])||{};
             var dump={mt:mt, url:(hls&&hls.url||'?'), lvl0:url&&url.length?url.substring(0,200):'?', attrs:lv.attrs?JSON.stringify(lv.attrs).substring(0,300):'?', audioCodec:lv.audioCodec, videoCodec:lv.videoCodec, hasDetails:!!lv.details};
-            /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[MTID] '+JSON.stringify(dump)}); */
-          }catch(e){ /* if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[MTID-ERR] '+e.message}); */ }
+            if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[MTID] '+JSON.stringify(dump)});
+          }catch(e){ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[MTID-ERR] '+e.message}); }
         });
         hls.attachMedia(v); hls.loadSource(url);
         show('CMG解密中...');

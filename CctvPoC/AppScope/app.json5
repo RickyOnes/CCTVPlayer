@@ -1,0 +1,11 @@
+{
+  "app": {
+    "bundleName": "com.RickyOne.TVPlayer",
+    "vendor": "RickyOne",
+    "versionCode": 1000900,
+    "versionName": "1.0.9",
+    "buildVersion": "1",
+    "icon": "$media:layered_image",
+    "label": "$string:app_name"
+  }
+}

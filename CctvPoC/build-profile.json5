@@ -1,0 +1,110 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_CctvPoC_X8bpVHEPI23OB_tvG6KNBwc15aJZcscHY2m7tLNje9Y=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "000000195A5A2B6D4EB6A080355DECA88C80FD84CA0244160BB101F95059C1502571FD434A3005F937",
+          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_CctvPoC_X8bpVHEPI23OB_tvG6KNBwc15aJZcscHY2m7tLNje9Y=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_CctvPoC_X8bpVHEPI23OB_tvG6KNBwc15aJZcscHY2m7tLNje9Y=.p12",
+          "storePassword": "000000193521E89B85DFC42B53E6354DC8CB2B4C6B3773239053DA84CAF1ECC8E706F00FFD58E395C1"
+        }
+      },
+      {
+        "name": "release",
+        "type": "HarmonyOS",
+        "material": {
+          "storeFile": "D:/TV/CCTV/CctvPoC/signatures/TVPlayer.p12",
+          "storePassword": "0000001C5C90359193C3D85F5F3441CE7F54A3E2C5F9AB13BE7F0878693032DCFCF8FBD6B78AFE4F572B3F24",
+          "keyAlias": "tvplayer",
+          "keyPassword": "0000001CDBE01E3A59836E9CD0CF7C53601F01B904CB9062A5469A0C9BA6C9B5A0FEF71DAD3E754A8ACF81DF",
+          "signAlg": "SHA256withECDSA",
+          "profile": "D:/TV/CCTV/CctvPoC/signatures/TVPlayerRelease.p7b",
+          "certpath": "D:/TV/CCTV/CctvPoC/signatures/TVPlayer.cer"
+        }
+      },
+      {
+        "name": "releaseTest",
+        "type": "HarmonyOS",
+        "material": {
+          "storeFile": "D:/TV/CCTV/CctvPoC/signatures/TVPlayer.p12",
+          "storePassword": "0000001C5C90359193C3D85F5F3441CE7F54A3E2C5F9AB13BE7F0878693032DCFCF8FBD6B78AFE4F572B3F24",
+          "keyAlias": "tvplayer",
+          "keyPassword": "0000001CDBE01E3A59836E9CD0CF7C53601F01B904CB9062A5469A0C9BA6C9B5A0FEF71DAD3E754A8ACF81DF",
+          "signAlg": "SHA256withECDSA",
+          "profile": "D:/TV/CCTV/CctvPoC/signatures/TVPlayerReleaseDebug.p7b",
+          "certpath": "D:/TV/CCTV/CctvPoC/signatures/TVPlayer-debug.cer"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "6.1.1(24)",
+        "compatibleSdkVersion": "6.1.0(23)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      },
+      {
+        "name": "release",
+        "signingConfig": "release",
+        "targetSdkVersion": "6.1.1(24)",
+        "compatibleSdkVersion": "6.1.0(23)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      },
+      {
+        "name": "releaseTest",
+        "signingConfig": "releaseTest",
+        "targetSdkVersion": "6.1.1(24)",
+        "compatibleSdkVersion": "6.1.0(23)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default",
+            "release",
+            "releaseTest"
+          ]
+        }
+      ]
+    }
+  ]
+}

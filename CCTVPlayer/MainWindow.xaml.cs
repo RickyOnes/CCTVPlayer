@@ -134,6 +134,19 @@ public partial class MainWindow : Window
             };
             // ★ 注入 JS hook 在 player.html 已自带, 此处不需要
             _webViewReady = true;
+            // ★ 联调: 命令行 --ch <频道名> 启动即自动播放 (如 CCTVPlayer.exe --ch CCTV-1)
+            var __args = Environment.GetCommandLineArgs();
+            var __ci = Array.FindIndex(__args, a => a == "--ch");
+            if (__ci >= 0 && __ci + 1 < __args.Length)
+            {
+                var __chName = __args[__ci + 1];
+                Log($"[联调] 启动参数自动播放: {__chName}");
+                _ = Dispatcher.InvokeAsync(async () =>
+                {
+                    await Task.Delay(800);
+                    PlayChannel(__chName);
+                });
+            }
             // 右键菜单: JS 注入 contextmenu 事件 → postMessage → C# ContextMenu
             OfficialWebView.CoreWebView2.NavigationCompleted += (s, e) =>
             {
@@ -207,8 +220,21 @@ public partial class MainWindow : Window
         try
         {
             obj = System.Text.Json.Nodes.JsonNode.Parse(json);
-            if (obj?["log"] != null) { Log($"[JS] {obj["log"]}"); return; }
-            if (obj?["err"] != null) { Log($"[JS-ERR] {obj["err"]}"); return; }
+            if (obj?["log"] != null)
+            {
+                // ★ 联调: JS 日志落盘 (CMGDEC/CMG/FIX-PB/ slim 等解密诊断全靠它)
+                try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
+                    $"[{DateTime.Now:HH:mm:ss.fff}] {obj["log"]}\n"); } catch { }
+                Log($"[JS] {obj["log"]}");
+                return;
+            }
+            if (obj?["err"] != null)
+            {
+                try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
+                    $"[{DateTime.Now:HH:mm:ss.fff}] [ERR] {obj["err"]}\n"); } catch { }
+                Log($"[JS-ERR] {obj["err"]}");
+                return;
+            }
         }
         catch { }
         _signatureTcs?.TrySetResult(json);
@@ -417,9 +443,25 @@ public partial class MainWindow : Window
                 }
             }
             OfficialWebView.CoreWebView2.NavigationCompleted += OnNav;
-            // ★ 导航到 yangshipin.cn (由 WebResourceRequested 拦截并返回本地 player.served.html),
-            //   使 location.href = https://yangshipin.cn/tv/home?pid=... (CMG InitPlayer 的种子来源)。
-            OfficialWebView.CoreWebView2.Navigate($"https://yangshipin.cn/tv/home?pid={cctvCh.Pid}");
+            // ★ 第二轮联调 (2026-09-01): 默认本地导航 http://127.0.0.1:18888/player, 不再跳转官网。
+            //   依据 (Node 实证): wasm 取 location 的唯一出口 eval("self.location.host|href|protocol"),
+            //   已被 player.html 的 WEVAL hook 用伪 location(yangshipin.cn) 拦截; 真正参与密钥派生的
+            //   种子是 self.activeURL(预置完整 FAKE_HREF, 与官网场景逐字节一致)。
+            //   cKey/yspticket/open-token 的 URL 均为 C# 显式传参, 不依赖真实导航。
+            //   --nav=official 可切回官网跳转模式做 A/B 对比。
+            var __navArgs = Environment.GetCommandLineArgs();
+            var __navIdx = Array.FindIndex(__navArgs, a => a != null && a.StartsWith("--nav="));
+            var __useLocal = !(__navIdx >= 0 && __navArgs[__navIdx].EndsWith("official"));
+            if (__useLocal)
+            {
+                Log("[联调] 导航模式: 本地 (不跳官网)");
+                OfficialWebView.CoreWebView2.Navigate("http://127.0.0.1:18888/player");
+            }
+            else
+            {
+                Log("[联调] 导航模式: 官网跳转");
+                OfficialWebView.CoreWebView2.Navigate($"https://yangshipin.cn/tv/home?pid={cctvCh.Pid}");
+            }
             await Task.WhenAny(navTcs.Task, Task.Delay(10000));
             OfficialWebView.CoreWebView2.NavigationCompleted -= OnNav;
 
@@ -1213,6 +1255,10 @@ public partial class MainWindow : Window
 
     void Log(string msg)
     {
+        // ★ 联调 (2026-09-01): 所有 C# 日志镜像落盘到 cctv-debug.log（[JS] 消息已由 HandleWebMessage 落盘）
+        //   状态栏仍保持精简, 但文件里保留全量链路, 便于离线诊断。
+        try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
+            $"[{DateTime.Now:HH:mm:ss.fff}] [CS] {msg}\n"); } catch { }
         // ★ 状态精简: 只显示关键信息；静默掉过于频繁的 diagnostic 消息
         if (msg.Contains("auth签名") || msg.Contains("MEDIA") || msg.Contains("wasm")
             || msg.Contains("cKey") || msg.Contains("yspticket") || msg.Contains("player.served")

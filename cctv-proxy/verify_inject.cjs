@@ -11,6 +11,7 @@ const root = path.resolve(__dirname, '..');
 const maingo = path.join(root, 'cctv-proxy', 'main.go');
 const hlsCache = path.join(root, 'CCTVPlayer', 'bin', 'Debug', 'net10.0-windows', 'win-x64', 'sapi_cache', 'assets_2025_wasm_hls.cmg.js');
 const wkrCache = path.join(root, 'CCTVPlayer', 'bin', 'Debug', 'net10.0-windows', 'win-x64', 'sapi_cache', 'assets_2025_wasm_cmg.worker.js');
+const slimCache = path.join(root, 'CCTVPlayer', 'bin', 'Debug', 'net10.0-windows', 'win-x64', 'sapi_cache', 'assets_2025_wasm_cmg.slim.js');
 
 const src = fs.readFileSync(maingo, 'utf8');
 // 捕获所有 `const NAME = `...`` 反引号串（注入串内部不含反引号）
@@ -62,6 +63,11 @@ console.log('=== 校验 cmg.worker.js 注入 ===');
 applyAndCheck(wkrCache, [
   ['fetchGateOld', 'fetchGateNew'],
 ], 'cmg.worker.js');
+
+console.log('=== 校验 cmg.slim.js 注入 ===');
+applyAndCheck(slimCache, [
+  ['fetchGateOld', 'fetchGateNew'],
+], 'cmg.slim.js');
 
 if (failed) {
   console.log('\n*** 语法校验失败，禁止 go build ***');

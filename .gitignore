@@ -40,3 +40,32 @@ cctv-proxy/_*.wat
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# ===== HarmonyOS / DevEco build & deps (CctvPoC) =====
+**/oh_modules/
+**/.hvigor/
+**/.idea/
+CctvPoC/build/
+CctvPoC/entry/build/
+CctvPoC/entry/namecache.json
+CctvPoC/entry/libs/          # leftover native .so (11MB, unreferenced by source)
+CctvPoC/local.properties
+CctvPoC/signatures/          # signing keys (.p12 etc.) — never commit
+CctvPoC/*.rar
+CctvPoC/.freebuff/           # IDE plugin data
+CctvPoC/.codegenie/          # AI-IDE metadata
+
+# ===== Project backups — local only, not for VCS =====
+/backup_*/
+*.tar.gz
+
+# ===== RE lab scratch — only the two generators + dist/ are part of the repo =====
+rev/*
+!rev/gen_slim.cjs
+!rev/gen_hm_inline.cjs
+!rev/dist/
+
+# ===== Ad-hoc outputs / planning notes not in the README tree =====
+/run_out*.txt
+/hmos_plan.md
+
