@@ -51,15 +51,26 @@ export default class EntryAbility extends UIAbility {
   onForeground(): void {
     // Ability has brought to foreground
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
-    // ★ 前台恢复时无需额外操作：AVSession 在 Index.ets 中已创建并持续活跃，
-    //   系统播控中心会自动显示当前播放状态。
+    // ★ 直播≠音乐：后台已暂停并隐藏媒体卡；回前台由 Index.ets 决定「短离续播」还是
+    //   「超过10s 重新鉴权起播」。通过 EventHub 通知页面（同一 UIAbilityContext）。
+    try {
+      this.context.eventHub.emit('tvpForeground');
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'emit tvpForeground failed: %{public}s', JSON.stringify(err));
+    }
   }
 
   onBackground(): void {
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
-    // ★ 后台模式：由于 module.json5 已声明 backgroundModes: ["audioPlayback"]，
-    //   系统会允许应用在后台继续播放音频（AVSession 保持活跃）。
-    //   此处无需暂停音频——后台播放是核心功能（息屏/锁屏直播观看）。
+    // ★ 直播流时效性极强，后台继续拉流毫无意义（m3u8/TS 会过期）：
+    //   退后台 → 通知 Index.ets 暂停播放、停止拉流、销毁媒体卡（卡片不再显示，
+    //   播控按钮不会再出现"点不动"的假死）。module.json5 的 backgroundModes 声明
+    //   保留仅用于防止进程被秒杀，不用于后台续播。
+    try {
+      this.context.eventHub.emit('tvpBackground');
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'emit tvpBackground failed: %{public}s', JSON.stringify(err));
+    }
   }
 }

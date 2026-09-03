@@ -26,7 +26,7 @@
 | 纯 Node 无法解密（"依赖浏览器环境"） | `ab_test.cjs` 实证：官方 `fG` 在 **Node 解密 5/5 成功**；成败差异 = 解密时的 `activeURL`（`jL` 长度） | ❌ **推翻** |
 | 方案 B（wasm2c 原生解密）"死刑 / 被否定" | `run_out27` 决定性实验：**6/6 帧逐字节 == Node 官方输出**；此前"被否定"是 **harness bug 造成的假阴性** | ❌ **推翻** |
 | 不手动 `createAVSession`，靠 `navigator.mediaSession.metadata` 也能出台标 | 日志 `artwork 已设置` 正常但系统媒体卡**始终无台标** ⇒ **ArkWeb 不把 MediaSession artwork 桥接到系统 AVSession**。2026-09 多轮修改全无效 | ❌ **推翻** |
-| 手动 `createAVSession` 会导致媒体卡片消失（"三次复现"） | 真因是**没 catch `6600101`**（ArkWeb 可能已先创建）；正确处理 6600101 后，**手动 create 是台标的唯一可行方案**（用户实测"完美解决"） | ❌ **推翻** |
+| 手动 `createAVSession` 会导致媒体卡片消失（"三次复现"） | 真因是**没 catch `6600101`**（ArkWeb 可能已先创建）；正确处理 6600101 后，**手动 create 是台标的唯一可行方案**（**2026-09-03 真机验证通过：媒体卡台标正常显示**） | ❌ **推翻** |
 
 ### 战役总览（按攻破顺序）
 
@@ -472,7 +472,7 @@ cd d:/TV/CCTV/cctv-proxy
 | 30s 后马赛克式花屏 | wasm 内部 ~750 帧计数器（**反篡改自检**，非许可证）无法从 JS 重置 | ★ 已解决：VMPATCH3 内存热修补（见 8.8）。⚠️ 扫描范围 `6684672~6698000` 与 wasm 版本绑定，上游更新（现 `V=1.2.1` / `CMG_BTime=Aug 13 2025`）后需重新确认 |
 | 鸿蒙：切台后黑屏 + `memory access out of bounds` | `__SLIM_WRITE_EB__` 闭包捕获了**第一个**实例的 `HEAPU8/eb`；第二实例把 eb_prog 写进了前一个实例的堆 | slim 改为 `__SLIM_WRITE_EB__(HEAPU8,HEAPU32,ebPtr)` 接收参数，并删除 `__SLIM_DONE__` 防重（见 §11.4） |
 | 鸿蒙：媒体卡片**没有台标** | ★ 2026-09 更正：Web 侧 `navigator.mediaSession.metadata` **从未生效**——日志 `artwork 已设置` 正常但系统媒体卡无台标 ⇒ **ArkWeb 不把 MediaSession artwork 桥接到系统 AVSession**。不是推送时机/尺寸/格式问题 | **唯一可用方案 = 原生手动 `createAVSession` + `setAVMetadata({mediaImage: PixelMap})`**（必须 catch `6600101`；见 §12.3） |
-| 鸿蒙：手动 `createAVSession` 后媒体卡片**消失** | ★ 2026-09 更正：**不是**"手动 create 冲突"。真因是把 **`6600101`（Session 已存在，ArkWeb 可能已先创建）当致命错误**处理。正确处理 6600101 后，手动 create 是**台标的唯一可用方案**（用户实测"完美解决"） | 按 §12.3 实现：catch `6600101` 跳过 + 先注册监听再 `activate()` + 退出 `deactivate()`/`destroy()` |
+| 鸿蒙：手动 `createAVSession` 后媒体卡片**消失** | ★ 2026-09 更正：**不是**"手动 create 冲突"。真因是把 **`6600101`（Session 已存在，ArkWeb 可能已先创建）当致命错误**处理。正确处理 6600101 后，手动 create 是**台标的唯一可用方案**（**2026-09-03 真机验证通过**） | 按 §12.3 实现：catch `6600101` 跳过 + 先注册监听再 `activate()` + 退出 `deactivate()`/`destroy()` |
 
 ---
 
@@ -706,7 +706,7 @@ setInterval(function(){
 
 1. **必须真实导航官网** —— 合规/审核风险，而且官网 DOM 是移动靶。
 2. **`cmg.worker.js` 1.3MB** —— 每次冷启动都要解析 110 万字符的十进制数组字面量，冷启动慢。
-3. **鸿蒙端要落地** —— 而鸿蒙**根本用不了**「导航官网 + `WebResourceRequested` 拦截」这一套（ArkWeb 没有等价机制）。
+3. **鸿蒙端要落地** —— ArkWeb **有与 `WebResourceRequested` 等价的资源拦截机制**（如 `WebviewController` / `onInterceptRequest` 拦截 http(s) 资源），机制上完全可行；真正挡路的是**启动性能**：走「导航官网 + 拦截」链路冷启动**超过官方约 4 秒**的启动时长要求，而完全本地（`127.0.0.1` 直接载入本地 `player.html` + 三大种子补丁）可以压进红线内——所以鸿蒙要走"不导航官网"这条路。
 
 于是从 2026-08-31 起，在 `d:/TV/CCTV/rev/` 建了 **Node 离线逆向实验室**（`exp1_load.cjs` / `exp3_hls.cjs` / `exp4_proof.cjs` / `exp5_init.cjs`），**不受既有文档与记忆约束**、以实证为准重新逆向。
 
@@ -728,7 +728,7 @@ setInterval(function(){
 > 本章**推翻 §4.4 / §4.5**。在 `d:/TV/CCTV/rev/` 建立 Node 离线逆向实验室后重新实证所得。
 
 ### 10.1 为什么要重审
-V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」能work，但代价很大：①必须让 WebView 真的访问官网（**合规/审核风险**）；②官网页面 DOM 随时可能变，脆弱；③**鸿蒙端根本用不了同样的导航手段**。所以必须搞清楚"到底是谁在读 location"。
+V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」能work，但代价很大：①必须让 WebView 真的访问官网（**合规/审核风险**）；②官网页面 DOM 随时可能变，脆弱；③鸿蒙端走「官网导航 + 拦截」**冷启动超过官方约 4 秒的启动时长红线**（ArkWeb 本有 `onInterceptRequest` 等**等价拦截机制**，**不是机制缺失**，是启动性能不允许）。所以必须搞清楚"到底是谁在读 location"，把导航官网这个包袱彻底扔掉。
 
 ### 10.2 事实一：wasm 取 location 的唯一出口是 `eval()`，而 `eval` 可 hook
 - `cmg.wat` 中 `call 21`（= import `env.y` = `_emscripten_asm_const_ii`）**全模块仅 1 处**，位于 `func[51]`（VM 解释器）第 2999 行。
@@ -832,6 +832,8 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
 ### 12.3 ★★ 媒体卡片台标：唯一可用方案 = **手动 `createAVSession`**（2026-09-03 用户实测，**已推翻此前全部结论**）
 
 > ⚠️ 本节**推翻**此前"台标真凶=推送时机 / 绝不手动 createAVSession"的结论。用户实测：**在不手动创建 AVSession 的前提下**，2026-09 做的大量修改（首帧补设、per-session 标志、CCTV-6 原生接管等）**全部无效**，已全部回退。
+>
+> ✅ **2026-09-03 真机验证通过（与酷狗并存场景）**：日志 `[avsession] AVSession 创建并激活成功` + `[avsession] 媒体元数据已更新: CCTV-1 综合 / CCTV-2 财经`（切台同步刷新），**下拉媒体卡片台标正常显示**；音频全程 `mode=MIX (share策略)`，酷狗音乐可后台续播不被本 App 打断 → **上架合规风险点清除**。
 
 **先排除的干扰项**（保留了诊断价值）：
 - `sizes` 写死 / dataURL 双前缀 / 图标缺失（仅 `bjcity` 缺）/ 图片格式 —— **全排除**，不是原因。
@@ -870,6 +872,7 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
   - `PAUSE_OTHERS` 只在**有声播放**时生效，这是视频 App 的**标准预期行为**（与 YouTube / 央视频一致），不是滥用式"音频独占"；
   - 静音时主动 `MIX` 让出、退出即释放焦点 —— 合规性充分；
   - **若仍想绝对保守**：只恢复 AVSession 部分，AudioSession 保留**恒定 MIX** 即可，两者互不影响 → **台标解决 + 音频行为完全不变 + 上架风险最低**。
+- **直播后台策略（2026-09-03 采纳）**：直播≠音乐，退后台**不再续播**——`EntryAbility.onBackground` 发事件 → 页面 `v.pause()` + `hls.stopLoad()`（最多播完已缓冲 TS）+ **销毁 AVSession（媒体卡消失，避免"按钮无响应"假死）** + 释放 AudioSession；回前台离开 **<10s** 直接 `startLoad()` 续播，**≥10s** 直播流已过期 → 重新走 **auth→get_live_info→下载** 全流程。另挂 `audioInterrupt` 监听：被系统/其他应用抢占时优雅暂停，恢复焦点时续播。
 
 ### 12.6 ★ 原生接管（AVPlayer）为何在 CCTV-6 上仍失败（2026-09-03 实测）
 用 **CCTV-6（不加密）** 做"原生 AVPlayer 接管 + 自建 AVSession + 台标 PixelMap"的最小验证时，实测到：桥**确实**触发（`接管 cctv6`）、AVPlayer 也确实去拉了 m3u8，但 `state=initialized` 后**约 90ms 就被 `release()`**（从未到 `prepared`/`playing`），最终退回页面 hls.js 的 MSE 兜底（有声画、**无台标**）。

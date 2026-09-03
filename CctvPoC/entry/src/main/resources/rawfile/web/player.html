@@ -666,6 +666,29 @@ window.__toggleMute = function(){
 window.__setVolume = function(n){
   try { v.muted = false; v.volume = Math.max(0, Math.min(1, Number(n)||0)); return v.volume; } catch(e){ return -1; }
 };
+// ★ 前后台桥（ArkTS ability 生命周期驱动）：
+//   退后台 → v.pause() + hls.stopLoad()：只播完已缓冲 TS，不再拉新清单/分片（直播流时效性太强）；
+//   回前台 → hls.startLoad() + 恢复播放（带声被拒则走静音启动+手势解锁兜底）。
+window.__bgPaused = false;
+window.__goBackground = function(){
+  window.__bgPaused = true;
+  try{ if(hls && hls.stopLoad) hls.stopLoad(); }catch(e){}
+  try{ if(v && !v.paused) v.pause(); }catch(e){}
+  try{ __post({log:'[bg] 退后台: 已暂停并停止拉流'}); }catch(e){}
+  return true;
+};
+window.__goForeground = function(){
+  window.__bgPaused = false;
+  try{ if(hls && hls.startLoad) hls.startLoad(); }catch(e){}
+  try{
+    if(v && v.paused){
+      if(typeof __playWithAudio==='function'){ __playWithAudio(); }
+      else { var p=v.play(); if(p&&p.catch)p.catch(function(){}); }
+    }
+  }catch(e){}
+  try{ __post({log:'[bg] 回前台: 已恢复拉流'}); }catch(e){}
+  return true;
+};
 window.__mediaState = function(){
   try { return {state:playerState,session:playerSession,readyState:v.readyState,buffered:bufferedAhead(),retry:retryCount,muted:v.muted,volume:v.volume,paused:v.paused}; } catch(e){ return null; }
 };

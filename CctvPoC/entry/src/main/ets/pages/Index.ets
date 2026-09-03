@@ -15,6 +15,7 @@ import { webview } from '@kit.ArkWeb';
 import { common } from '@kit.AbilityKit';
 import { window, display } from '@kit.ArkUI';
 import { audio } from '@kit.AudioKit';
+import { avSession } from '@kit.AVSessionKit';
 import { image } from '@kit.ImageKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { CctvChannel, Channels, channelName, channelsByGroup, channelIcon } from '../common/ChannelList';
@@ -36,7 +37,7 @@ const WAIT_HTML: string =
  *    否则升级安装时 player_boot.html「缓存命中」会继续用旧内容，改动不生效。
  *    版本标记文件：{filesDir}/proxy/web/player_boot.ver（部署成功后写入本值）。
  */
-const PLAYER_DEPLOY_VER: number = 2;
+const PLAYER_DEPLOY_VER: number = 3;
 
 interface TabDef {
   label: string;
@@ -170,6 +171,18 @@ struct Index {
   private volCur: number = 15;   // 当前系统媒体音量档
   private audioSessionManager: audio.AudioSessionManager | null = null;  // ★ 音频会话管理器（短音焦点策略）
   private audioSessionActive: boolean = false;  // ★ AudioSession 是否已激活
+  // ★ AVSession（媒体卡片：标题/台标/播控中心展示）。与 AudioSession 完全独立——
+  //   它不参与音频焦点，故手动创建对"音频独占/上架合规"零影响。
+  private avSession: avSession.AVSession | null = null;
+  // ★ 前后台策略：直播时效性强，退后台 → 暂停+停止拉流+隐藏媒体卡；
+  //   回前台离开<10s 续播，≥10s 重新鉴权起播（m3u8/TS 大概率已过期）。
+  private bgSince: number = 0;                        // 退后台时刻；0=从未退后台
+  // ★ 说明：AudioManager.on('interrupt') 为 deprecated(7/9/11) 旧 API 且本 SDK @kit 下类型不可用；
+  //   现代 on('audioInterrupt') 只挂在 AudioRenderer 上，而本 App 音频由 ArkWeb <video> 内部渲染、
+  //   拿不到 renderer —— 故不注册打断监听。打断场景由「前后台策略」兜底（退后台暂停、
+  //   回前台续播/重播），且 AudioSession 恒为 SHARE/MIX 不抢焦点，合规无虞。
+  private bgHandler: () => void = () => { this.appToBackground(); };
+  private fgHandler: () => void = () => { this.appToForeground(); };
 
   /** 初始化系统媒体音量: 读取档位范围与当前值 (AudioManager 为 deprecated API, 但仍是三方应用调系统音量的唯一途径) */
   private initSystemVolume(): void {
@@ -255,6 +268,235 @@ struct Index {
    */
   private handleMuteChanged(newMuted: boolean): void {
     this.muted = newMuted;
+  }
+
+  // ==================== AVSession（媒体卡片：标题 / 台标 / 播控中心） ====================
+  // ★ 2026-09-03 恢复（源自 backup_CctvPoC_20260830_clean，用户实测台标"完美解决"）。
+  //   与 AudioSession 完全独立：AVSession 只负责"播控中心/媒体卡片展示"，不参与音频焦点，
+  //   因此手动创建对"音频独占 / 上架合规"零影响；音频并发策略仍由上面的
+  //   AudioSessionManager（恒定 SHARE/MIX）决定。
+
+  /** 初始化 AVSession。必须 catch 6600101：ArkWeb 可能已先创建，那不是致命错误。 */
+  private async initAVSession(): Promise<void> {
+    if (this.avSession) {
+      return;
+    }
+    try {
+      // 类型用 'video'，与直播内容匹配
+      this.avSession = await avSession.createAVSession(this.ctx, 'CCTVPlayer', 'video');
+
+      // 播控中心点击"播放"
+      this.avSession.on('play', () => {
+        console.info('[avsession] 播控中心: 播放');
+        // ★ 加 catch 防止后台 JS 执行失败抛异常
+        this.evalJs('document.querySelector("video")?.play()').catch(() => {});
+        this.syncPlaybackState(true);
+      });
+
+      // 播控中心点击"暂停"
+      this.avSession.on('pause', () => {
+        console.info('[avsession] 播控中心: 暂停');
+        this.evalJs('document.querySelector("video")?.pause()').catch(() => {});
+        this.syncPlaybackState(false);
+      });
+
+      // ★ 初始状态设为 PAUSE，等真正播放时再更新为 PLAY（避免无音频流时系统拒绝显示）
+      await this.avSession.setAVPlaybackState({
+        state: avSession.PlaybackState.PLAYBACK_STATE_PAUSE,
+        position: { elapsedTime: 0, updateTime: Date.now() }
+      });
+
+      // 激活（必须在命令注册完成后）
+      await this.avSession.activate();
+      console.info('[avsession] AVSession 创建并激活成功');
+      // ★ 边界：创建期间用户已切后台（async 竞态）→ 立即销毁，避免后台仍显示媒体卡
+      if (this.bgSince > 0) {
+        try {
+          this.avSession.deactivate();
+          this.avSession.destroy();
+        } catch (e) { /* 忽略 */ }
+        this.avSession = null;
+      }
+    } catch (e) {
+      const msg = (e as Error).message;
+      // 6600101 表示 Session 已存在（ArkWeb 可能已创建），不算致命错误
+      if (msg.indexOf('6600101') >= 0 || msg.indexOf('already exists') >= 0) {
+        console.info('[avsession] AVSession 已存在，跳过创建');
+      } else {
+        console.error('[avsession] AVSession 初始化失败: ' + msg);
+      }
+    }
+  }
+
+  /** 同步 AVSession 播放状态（媒体卡片的播放/暂停角标） */
+  private async syncPlaybackState(isPlaying: boolean): Promise<void> {
+    if (!this.avSession) {
+      return;
+    }
+    try {
+      await this.avSession.setAVPlaybackState({
+        state: isPlaying
+          ? avSession.PlaybackState.PLAYBACK_STATE_PLAY
+          : avSession.PlaybackState.PLAYBACK_STATE_PAUSE,
+        position: { elapsedTime: 0, updateTime: Date.now() }
+      });
+    } catch (e) {
+      console.error('[avsession] 同步播放状态失败: ' + (e as Error).message);
+    }
+  }
+
+  /**
+   * 更新 AVSession 媒体元数据：台标走 mediaImage: PixelMap（PNG 透明图标合成到白底正方形画布）。
+   * @param title 频道名
+   * @param iconDataUrl 频道图标 data URL（data:image/...;base64,...）；空则只设标题
+   */
+  private async updateAVSessionMetadata(title: string, iconDataUrl: string): Promise<void> {
+    if (!this.avSession) {
+      return;
+    }
+    try {
+      let pixelMap: image.PixelMap | null = null;
+
+      if (iconDataUrl && iconDataUrl.startsWith('data:image')) {
+        const base64 = iconDataUrl.split(',')[1];
+        if (base64) {
+          const helper = new util.Base64Helper();
+          const decoded = helper.decodeSync(base64, util.Type.MIME);
+          const src = image.createImageSource(decoded.buffer as ArrayBuffer);
+
+          // 1. 先创建原图 PixelMap 读取真实尺寸
+          const originalPm = await src.createPixelMap({
+            desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+          });
+          const info = await originalPm.getImageInfo();
+          const srcW = info.size.width;
+          const srcH = info.size.height;
+
+          // 2. 取长边为基准，乘以边距系数，生成带白边的正方形画布
+          const marginRatio = 1.1;
+          const canvasSize = Math.round(Math.max(srcW, srcH) * marginRatio);
+          const offsetX = Math.floor((canvasSize - srcW) / 2);
+          const offsetY = Math.floor((canvasSize - srcH) / 2);
+
+          // 3. 读取原图 RGBA 像素
+          const srcRowBytes = srcW * 4;
+          const srcBuffer = new ArrayBuffer(srcH * srcRowBytes);
+          const area: image.PositionArea = {
+            pixels: srcBuffer,
+            offset: 0,
+            stride: srcRowBytes,
+            region: {
+              size: { width: srcW, height: srcH },
+              x: 0,
+              y: 0
+            }
+          };
+          await originalPm.readPixels(area);
+          const srcU8 = new Uint8Array(srcBuffer);
+
+          // 4. 创建白色正方形画布 (RGBA=255)
+          const dstRowBytes = canvasSize * 4;
+          const dstTotalBytes = canvasSize * dstRowBytes;
+          const dstU8 = new Uint8Array(dstTotalBytes);
+          dstU8.fill(255);
+
+          // 5. ★ 关键修复：逐像素 Alpha 混合，透明像素与白色背景融合
+          for (let row = 0; row < srcH; row++) {
+            const srcOffset = row * srcRowBytes;
+            const dstOffset = (offsetY + row) * dstRowBytes + offsetX * 4;
+            for (let col = 0; col < srcW; col++) {
+              const s = srcOffset + col * 4;
+              const d = dstOffset + col * 4;
+              const alpha = srcU8[s + 3] / 255.0;                    // A 通道归一化
+              dstU8[d] = Math.round(srcU8[s] * alpha + 255 * (1 - alpha)); // R
+              dstU8[d + 1] = Math.round(srcU8[s + 1] * alpha + 255 * (1 - alpha)); // G
+              dstU8[d + 2] = Math.round(srcU8[s + 2] * alpha + 255 * (1 - alpha)); // B
+              dstU8[d + 3] = 255;                                    // A = 不透明
+            }
+          }
+
+          // 6. 释放原图资源
+          await originalPm.release();
+          await src.release();
+
+          // 7. 从白底 buffer 生成新的正方形 PixelMap
+          const opts: image.InitializationOptions = {
+            size: { width: canvasSize, height: canvasSize },
+            pixelFormat: image.PixelMapFormat.RGBA_8888,
+            editable: true
+          };
+          pixelMap = await image.createPixelMap(dstU8.buffer, opts);
+        }
+      }
+
+      if (pixelMap) {
+        await this.avSession.setAVMetadata({
+          assetId: 'cctv_' + title,
+          title: title,
+          artist: 'TVPlayer',
+          mediaImage: pixelMap,
+          duration: 0
+        });
+      } else {
+        await this.avSession.setAVMetadata({
+          assetId: 'cctv_' + title,
+          title: title,
+          artist: 'TVPlayer',
+          duration: 0
+        });
+      }
+
+      await this.syncPlaybackState(true);
+      console.info('[avsession] 媒体元数据已更新: ' + title);
+
+    } catch (e) {
+      console.error('[avsession] 设置媒体元数据失败: ' + (e as Error).message);
+    }
+  }
+
+  // ==================== 前后台 & 音频打断（直播后台策略） ====================
+
+  /** 退后台：暂停 + hls.stopLoad() + 隐藏媒体卡（直播后台不显示卡片、不再拉流） */
+  private appToBackground(): void {
+    this.bgSince = Date.now();
+    console.info('[lifecycle] 退后台：暂停拉流并隐藏媒体卡');
+    // 1. 销毁 AVSession → 媒体卡从播控中心消失（避免"卡片一直显示、按钮无响应"）
+    if (this.avSession) {
+      try {
+        this.avSession.deactivate();
+        this.avSession.destroy();
+      } catch (e) { /* 忽略 */ }
+      this.avSession = null;
+    }
+    // 2. 已无播放 → 释放 AudioSession（不占任何音频焦点）
+    this.deactivateAudioSession();
+    // 3. 页面侧：v.pause() + hls.stopLoad()（最多播完已缓冲 TS，不再新拉）
+    this.evalJs('window.__goBackground ? window.__goBackground() : 0').catch(() => {});
+  }
+
+  /** 回前台：离开<10s 短离续播；≥10s 重新走 auth→get_live_info→下载 的正常播放流程 */
+  private async appToForeground(): Promise<void> {
+    if (this.bgSince === 0) {
+      return;   // 冷启动或未真正退过后台，忽略（避免误重启）
+    }
+    const gap = Date.now() - this.bgSince;
+    this.bgSince = 0;
+    console.info('[lifecycle] 回前台：离开 ' + gap + 'ms');
+    // 恢复音频会话（SHARE/MIX，不独占）
+    this.activateAudioSessionShare();
+    // 重建媒体卡（标题/台标）
+    await this.initAVSession();
+    if (gap >= 10000) {
+      // ≥10s：m3u8/TS 大概率过期 → 重新鉴权起播（playChannel 内含全套流程）
+      console.info('[lifecycle] 离开≥10s，重新鉴权起播: ' + this.activeChannel.name);
+      this.playChannel(this.activeChannel);
+      return;
+    }
+    // 短离：重建媒体卡信息 + 恢复拉流
+    const icon = await this.channelIconDataUrl(this.activeChannel.id);
+    this.updateAVSessionMetadata(this.activeChannel.name, icon);
+    this.evalJs('window.__goForeground ? window.__goForeground() : 0').catch(() => {});
+    console.info('[lifecycle] 短离，恢复拉流播放');
   }
 
   /** 应用窗口亮度 (0~1): window.setWindowBrightness 仅主窗口生效, 退出应用自动恢复 */
@@ -584,6 +826,19 @@ struct Index {
     // ★ 合规修复: 必须在任何音频播放前激活 AudioSession 为 SHARE 策略（MIX），
     //   否则系统会使用默认 STOP 策略打断其他音频。
     this.activateAudioSessionShare();
+    // ★ AVSession（媒体卡片）与页面加载并行初始化，不阻塞冷启动。
+    //   手动 createAVSession 是台标能显示的唯一可行方案（用户 2026-09-03 实测）；
+    //   6600101(已存在) 已在 initAVSession 内按非致命处理。
+    this.initAVSession().catch((e: Error) => {
+      console.error('[avsession] 初始化失败，继续启动: ' + e.message);
+    });
+    // ★ 前后台订阅：退后台暂停+隐藏媒体卡；回前台短离续播/≥10s 重播
+    try {
+      this.ctx.eventHub.on('tvpBackground', this.bgHandler);
+      this.ctx.eventHub.on('tvpForeground', this.fgHandler);
+    } catch (e) {
+      console.error('[lifecycle] EventHub 订阅失败: ' + (e as Error).message);
+    }
     // ★ 冷启动优化: 图标加载延迟到首帧后，避免启动阶段 23 张图片 IO 抢占 CPU/带宽
     setTimeout(() => {
       this.loadChannelIcons(channelsByGroup('cctv')).catch(() => {});
@@ -629,6 +884,20 @@ struct Index {
         this.winObj.off('windowSizeChange', this.resizeHandler);
       } catch (e) {}
       this.resizeHandler = null;
+    }
+    // ★ 取消前后台订阅
+    try {
+      this.ctx.eventHub.off('tvpBackground', this.bgHandler);
+      this.ctx.eventHub.off('tvpForeground', this.fgHandler);
+    } catch (e) {}
+    if (this.avSession) { // ★ 销毁 AVSession（媒体卡片随应用退出消失）
+      try {
+        this.avSession.deactivate();
+        this.avSession.destroy();
+        this.avSession = null;
+      } catch (e) {
+        // 忽略
+      }
     }
     // ★ 合规修复: 释放 AudioSession，让其他应用恢复音频焦点
     this.deactivateAudioSession();
@@ -812,6 +1081,8 @@ struct Index {
         if (state === 'PLAYING') {
           this.statusText = '播放中';
           this.loading = false;
+          // ★ 首帧真正渲染后才同步系统媒体卡片为"播放中"
+          this.syncPlaybackState(true);
         } else if (state === 'PREPARING') {
           this.statusText = '准备播放中…';
           this.loading = true;
@@ -1288,6 +1559,9 @@ struct Index {
           throw new Error('播放器拒绝启动（CMG 重试 3 次仍失败）');
         }
       }
+      // ★ 同步系统级媒体卡片（下拉栏播控中心）：标题 + 台标(PixelMap) + 播放状态。
+      //   内部已 catch，失败不影响播放主流程。
+      await this.updateAVSessionMetadata(ch.name, iconDataUrl);
       this.playerState = 'PREPARING';
       this.statusText = '缓冲中…';
       this.loading = true;

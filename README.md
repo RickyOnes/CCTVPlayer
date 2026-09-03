@@ -21,7 +21,7 @@
 | 纯净播放 | ✅ | VMPATCH3 wasm 内存热修补，30s 衰减 0 帧、黑屏 0 次 |
 | **不导航官网** | ✅ | 本地 `127.0.0.1` + `eval` hook（WEVAL）+ `activeURL` 种子 + emval `origin` Proxy。**推翻旧"必须真实导航 yangshipin.cn"结论** |
 | **源文件瘦身（slim）** | ✅ | `cmg.worker.js` 1.30MB → `cmg.slim.js` 186KB + `eb_prog.bin` 378KB + `reloc_table.bin` 40KB ≈ **604KB**（−54%）。`hls.cmg.js`（704KB）**刻意保留**——替换它的尝试已失败（见 4.4） |
-| **鸿蒙端（`CctvPoC/`）** | ✅ 已交付 | ArkWeb + slim，真机换台正常。**媒体卡台标：唯一可用方案 = 原生手动 `createAVSession` + `setAVMetadata(mediaImage: PixelMap)`**（用户实测完美解决） |
+| **鸿蒙端（`CctvPoC/`）** | ✅ 已交付 | ArkWeb + slim，真机换台正常。**媒体卡台标已解决（2026-09-03 真机验证通过）**：原生手动 `createAVSession` + `setAVMetadata(mediaImage: PixelMap)`；音频全程 share/MIX，与酷狗等并存不打断 |
 | 节目单 EPG | ✅ | 状态栏滚动显示「正在 / 即将」，右键菜单完整节目表 |
 | hls.js 致命错误自愈 | ✅ | 解码崩溃自动重载并恢复拉流 |
 | 时移 / 直播内拖动 | ❌ 未完成 | **解密不是瓶颈**——单纯没实现（见 8.1） |
@@ -318,7 +318,7 @@ cd d:/TV/CCTV/CCTVPlayer; dotnet publish -c Release
 **结论一句话：台标的唯一可用方案 = 原生手动 `createAVSession` + `setAVMetadata({ mediaImage: PixelMap })`。**
 
 - **Web 侧 `navigator.mediaSession.metadata` 从未生效**：真机日志能看到 `artwork 已设置 144x72`（Web 侧代码本身正确），但系统媒体卡**始终没有台标**。⇒ **ArkWeb 不把 MediaSession artwork 桥接到系统 AVSession**。再调推送时机/尺寸/格式都没用。
-- **手动 createAVSession 完美解决台标**（用户实测）。可用备份：`backup_CctvPoC_20260830_clean/`。
+- **手动 createAVSession 完美解决台标** —— ✅ **2026-09-03 真机验证通过**：`[avsession] 媒体元数据已更新: CCTV-1/CCTV-2` 切台同步，媒体卡台标正常；与酷狗并存时全程 `mode=MIX (share策略)` 互不打断。可用备份：`backup_CctvPoC_20260830_clean/`。
 
 **关键实现要点（缺一不可）：**
 1. `avSession.createAVSession(ctx, 'CCTVPlayer', 'video')`；

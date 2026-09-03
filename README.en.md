@@ -21,7 +21,7 @@
 | Clean playback | ✅ | VMPATCH3 wasm memory hot-patch: 0 decay frames at 30s, 0 black screens |
 | **No official-website navigation** | ✅ | Local `127.0.0.1` + `eval` hook (WEVAL) + `activeURL` seed + emval `origin` Proxy. **Overturns the old "must really navigate to yangshipin.cn" conclusion** |
 | **Source slimming (slim)** | ✅ | `cmg.worker.js` 1.30MB → `cmg.slim.js` 186KB + `eb_prog.bin` 378KB + `reloc_table.bin` 40KB ≈ **604KB** (−54%). `hls.cmg.js` (704KB) **deliberately kept** — replacing it failed, see 4.4 |
-| **HarmonyOS port (`CctvPoC/`)** | ✅ shipped | ArkWeb + slim; channel switching verified on device. Media-card logo: **only** a manual `createAVSession` + `setAVMetadata(mediaImage: PixelMap)` works (verified on device; `navigator.mediaSession.metadata` never shows a logo) |
+| **HarmonyOS port (`CctvPoC/`)** | ✅ shipped | ArkWeb + slim; channel switching verified on device. **Media-card logo solved (device-verified 2026-09-03)**: only a manual `createAVSession` + `setAVMetadata(mediaImage: PixelMap)` works; audio stays share/MIX — coexists with Kugou music, no exclusivity |
 | EPG program guide | ✅ | Status-bar scroller ("now / next") + right-click full program list |
 | hls.js fatal-error self-heal | ✅ | Decoder crash auto-reloads and resumes streaming |
 | Timeshift / in-live seek | ❌ not done | **decryption is NOT the blocker** — simply never implemented (see 8.1) |
