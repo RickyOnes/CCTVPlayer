@@ -11,6 +11,8 @@
 >
 > ⚠️ **V6.0 is an "overturning" revision (2026-09)**: several conclusions this README previously stated as fact have been **disproven** — most importantly, **you do NOT need to navigate to the official website**. The whitepaper's "§0 Overturned conclusions" table lists all of them; this README has been updated to match.
 
+📦 **Assets & build note**: this public repository contains **self-written code only**. Official web resources, the decryption-engine assets and RE tooling (`源文件/`, `cctv-proxy/sapi_cache/`, `rev/`, and several wasm/js injection assets) are **not distributed in this repo** (kept in a private backup). `CCTVPlayer.csproj` references them conditionally (`Exists`), so a fresh clone without them still compiles; **GitHub Release attachments are complete runnable builds** — download those to run.
+
 ---
 
 ## 1. Features

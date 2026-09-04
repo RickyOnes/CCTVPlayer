@@ -39,33 +39,39 @@
   <ItemGroup>
     <Content Include="player.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="tv-icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
-    <Content Include="keygen_bg.wasm" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
-    <Content Include="RJq7sO71JF.wasm" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
-    <Content Include="ts_module_body.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <!-- ★ 以下三项为官方/逆向素材, 不随公开仓库分发(私有 CCTVAssets 仓库), 本地存在才随调试输出复制 -->
+    <Content Include="keygen_bg.wasm" Condition="Exists('keygen_bg.wasm')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <Content Include="RJq7sO71JF.wasm" Condition="Exists('RJq7sO71JF.wasm')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <Content Include="ts_module_body.js" Condition="Exists('ts_module_body.js')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <Content Include="gen_yspticket.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     
-    <!-- ★ 使用宏明确路径 ★ cctv-proxy.exe: 调试输出需要; 发布由 publish.ps1 单独复制, 不进 publish 目录 -->
+    <!-- ★ 使用宏明确路径 ★ cctv-proxy.exe: 调试输出需要; 发布由 publish.ps1 单独复制, 不进 publish 目录。
+         源码公开克隆不携带编译好的 exe, 存在时才复制。 -->
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\cctv-proxy.exe"
+            Condition="Exists('$(MSBuildProjectDirectory)\..\cctv-proxy\cctv-proxy.exe')"
             CopyToOutputDirectory="PreserveNewest"
             CopyToPublishDirectory="Never"
             Link="cctv-proxy.exe" />
 
-    <!-- ★ 代理缓存: 播放必需的四件套 (slim 解密三件套 + 官方 hls.cmg.js)。
-         cmg.worker.js(1.30MB) 已由 slim 取代、页面从不请求, 不再随行。
-         注意: slim 三件套是本地生成产物(rev/gen_slim.cjs), 上游不存在, 代理缓存未命中会 404。 -->
+    <!-- ★ 代理缓存(官方/逆向素材, 私有 CCTVAssets 仓库, 本地存在时才复制):
+         slim 三件套是本地生成产物(rev/gen_slim.cjs), 上游不存在, 代理缓存未命中会 404。 -->
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_cmg.slim.js"
+            Condition="Exists('$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_cmg.slim.js')"
             CopyToOutputDirectory="PreserveNewest"
             CopyToPublishDirectory="Never"
             Link="sapi_cache\assets_2025_wasm_cmg.slim.js" />
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_eb_prog.bin"
+            Condition="Exists('$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_eb_prog.bin')"
             CopyToOutputDirectory="PreserveNewest"
             CopyToPublishDirectory="Never"
             Link="sapi_cache\assets_2025_wasm_eb_prog.bin" />
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_reloc_table.bin"
+            Condition="Exists('$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_reloc_table.bin')"
             CopyToOutputDirectory="PreserveNewest"
             CopyToPublishDirectory="Never"
             Link="sapi_cache\assets_2025_wasm_reloc_table.bin" />
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_hls.cmg.js"
+            Condition="Exists('$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_hls.cmg.js')"
             CopyToOutputDirectory="PreserveNewest"
             CopyToPublishDirectory="Never"
             Link="sapi_cache\assets_2025_wasm_hls.cmg.js" />

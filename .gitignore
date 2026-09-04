@@ -62,11 +62,20 @@ CctvPoC/.codegenie/
 /backup_*/
 *.tar.gz
 
-# ===== RE lab scratch — only the two generators + dist/ are part of the repo =====
-rev/*
-!rev/gen_slim.cjs
-!rev/gen_hm_inline.cjs
-!rev/dist/
+# ===== RE lab scratch — 已全部移入私有仓库 CCTVAssets, 公开库不跟踪 =====
+rev/
+
+# ===== Official/RE assets — local + private repo (CCTVAssets) only =====
+/源文件/
+/cctv-proxy/sapi_cache/
+/CCTVPlayer/keygen_bg.wasm
+/CCTVPlayer/RJq7sO71JF.wasm
+/CCTVPlayer/ts_module_body.js
+# Harmony rawfile 内嵌官方资产(私有 CCTVAssets 仓库; 本地保留供 DevEco 打包)
+/CctvPoC/entry/src/main/resources/rawfile/sapi_cache/
+/CctvPoC/entry/src/main/resources/rawfile/web/keygen_bg.wasm
+/CctvPoC/entry/src/main/resources/rawfile/web/RJq7sO71JF.wasm
+/CctvPoC/entry/src/main/resources/rawfile/web/ts_module_body.js
 
 # ===== Ad-hoc outputs / planning notes not in the README tree =====
 /run_out*.txt
