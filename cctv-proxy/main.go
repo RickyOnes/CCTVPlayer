@@ -236,6 +236,38 @@ func main() {
 		}
 	}
 
+	// ===== /warm : 预热 CDN/API 固定域名 (DNS + TLS 握手; 空闲连接留在 h2/h1 连接池复用) =====
+	//   调用方: 桌面 CCTVPlayer 启动后异步调一次; 与鸿蒙 ArktsProxy 的 warmDns 等价。
+	//   仅预热不缓存任何内容; 不动 /media 逻辑 (2026-09-04 用户拍板: 只做 /warm)。
+	warmHosts := []string{
+		"hlslive-tx-cdn.ysp.cctv.cn",
+		"mobilelive-play.ysp.cctv.cn",
+		"live-dtocnc-cdn.ysp.cctv.cn",
+		"sapi.yangshipin.cn",
+		"player-api.yangshipin.cn",
+		"h5access.yangshipin.cn",
+	}
+	http.HandleFunc("/warm", func(w http.ResponseWriter, r *http.Request) {
+		out := make([]string, 0, len(warmHosts))
+		for _, h := range warmHosts {
+			u := "https://" + h + "/"
+			t0 := time.Now()
+			resp, err := fetchH1("GET", u, nil, http.Header{})
+			if err != nil {
+				out = append(out, fmt.Sprintf("%s fail(%v)", h, err))
+				continue
+			}
+			// 读完响应体再关闭 → 空闲连接可回池复用 (HTTP/1.1 keep-alive / HTTP/2 多路复用)
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			out = append(out, fmt.Sprintf("%s ok(%d) %dms", h, resp.StatusCode, time.Since(t0).Milliseconds()))
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		for _, s := range out {
+			fmt.Fprintln(w, s)
+		}
+	})
+
 	// ★ 把 m3u8 里的相对 URI 解析成基于 m3u8 自身 URL 目录的绝对 CDN URL。
 	//   原因: 页面 [net] 改写函数只匹配含 cctv.cn/yangshipin.cn 的 URL; 若 TS 分片是相对路径
 	//   (如 2024078203_web-1757296101.ts), 浏览器会按页面 origin 127.0.0.1:18888/player/ 去取 → 404。

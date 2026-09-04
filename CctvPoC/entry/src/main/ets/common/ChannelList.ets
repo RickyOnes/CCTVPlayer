@@ -1,5 +1,6 @@
 /**
- * ChannelList - 央视频频道列表（与桌面版 PlayerService.cs Channels 对齐）
+ * ChannelList - 央视频频道列表（★ 权威来源）
+ * 桌面版 PlayerService.cs Channels 已按本文件全量回灌对齐 (2026-09-04)。
  * 切换频道时以 Pid 走 /auth + /get-live-info 全流程。
  */
 

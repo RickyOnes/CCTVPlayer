@@ -563,6 +563,30 @@ window.__startM3u8 = function(url) {
         go();
     }
 };
+// ★ 前后台桥 (2026-09-04 与鸿蒙后台策略对齐):
+//   最小化(=后台) → v.pause() + hls.stopLoad(): 不再拉新清单/分片(直播流时效性太强);
+//   恢复(<10s)  → hls.startLoad() + 恢复播放(带声被拒则静音兜底)。
+window.__bgPaused = false;
+window.__goBackground = function(){
+  window.__bgPaused = true;
+  try{ if(hls && hls.stopLoad) hls.stopLoad(); }catch(e){}
+  try{ if(v && !v.paused) v.pause(); }catch(e){}
+  try{ post({log:'[bg] 已暂停并停止拉流'}); }catch(e){}
+  return true;
+};
+window.__goForeground = function(){
+  window.__bgPaused = false;
+  try{ if(hls && hls.startLoad) hls.startLoad(); }catch(e){}
+  try{
+    if(v && v.paused){
+      v.muted = false;
+      var p = v.play();
+      if (p && p.catch) p.catch(function(){ v.muted = true; var p2 = v.play(); if(p2&&p2.catch)p2.catch(function(){}); });
+    }
+  }catch(e){}
+  try{ post({log:'[bg] 已恢复拉流'}); }catch(e){}
+  return true;
+};
 </script>
 
 <!-- ===== cKey 生成器 (纯 JS, 复刻官方 chunk-vendors 模块 fb15 的 ts()) =====

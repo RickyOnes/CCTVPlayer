@@ -53,8 +53,8 @@ foreach ($f in $assets) {
     }
 }
 
-# 6) 复制 sapi_cache 缓存目录
-$cacheSrc = Join-Path $rootDir "sapi_cache"
+# 6) 复制 sapi_cache 缓存目录 (★ 2026-09-04: 物理位置在 cctv-proxy/sapi_cache, 根目录没有!)
+$cacheSrc = Join-Path $proxyDir "sapi_cache"
 if (Test-Path $cacheSrc) {
     Copy-Item -Recurse $cacheSrc (Join-Path $releaseDir "sapi_cache") -Force
 }

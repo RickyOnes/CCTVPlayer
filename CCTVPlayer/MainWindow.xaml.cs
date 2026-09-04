@@ -24,6 +24,14 @@ public partial class MainWindow : Window
     CoreWebView2Environment? _webViewEnv;
     // ★ 单文件发布下, AppDir 指向临时解压目录(无伴生文件). 改用 exe 真实所在目录.
     static readonly string AppDir = System.IO.Path.GetDirectoryName(Environment.ProcessPath)!;
+    // ★ 2026-09-04 发布清理: 解密诊断日志逐帧高频, 默认不落盘; 离线诊断设 CCTV_VERBOSE_JS=1 恢复全量
+    static readonly bool _verboseJsLogs = string.Equals(
+        Environment.GetEnvironmentVariable("CCTV_VERBOSE_JS"), "1", StringComparison.Ordinal);
+    static readonly string[] JsNoisePrefixes =
+    {
+        "[WARM]", "[DISP]", "[UPDB]", "[JSDEB]", "[CMGDEC", "[KTBL]",
+        "[EVAL", "[LOC-SPOOF]", "[MTID]", "[KEYSCAN]", "[REPLAY]", "[INIT="
+    };
     Rect _normalRect;
     Rect _fsRestoreRect;      // ★ 全屏专用: 退出全屏时的位置大小 (不与 BtnMaxRestore 的 _normalRect 混淆)
     WindowState _fsRestoreState;  // ★ 全屏专用: 退出全屏时的窗口状态
@@ -40,6 +48,9 @@ public partial class MainWindow : Window
     // 节目信息刷新
     System.Threading.Timer? _epgTimer;
     string _playingChannelName = "";
+    // ★ EPG 缓存 + 心跳刷新 (2026-09-04): 拉取失败也能用本地时钟推进"正在/即将"
+    List<EpgProgram> _epgCache = new List<EpgProgram>();
+    DateTime _lastEpgFetch = DateTime.MinValue;
 
     // ★ seqid 持久化: 对齐浏览器, 计数器存于本地文件, 跨运行单调递增, 永不复用旧值。
     //   浏览器把 nseqId 存在 cookie/localStorage, 删 cookie 才归 1; 服务器据此校验 seqid 不回退, 复用旧值 → 20401。
@@ -214,6 +225,13 @@ public partial class MainWindow : Window
         }
     }
 
+    static bool IsJsNoise(string m)
+    {
+        foreach (var p in JsNoisePrefixes)
+            if (m.StartsWith(p, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     void HandleWebMessage(string json)
     {
         System.Text.Json.Nodes.JsonNode? obj = null;
@@ -222,10 +240,11 @@ public partial class MainWindow : Window
             obj = System.Text.Json.Nodes.JsonNode.Parse(json);
             if (obj?["log"] != null)
             {
-                // ★ 联调: JS 日志落盘 (CMGDEC/CMG/FIX-PB/ slim 等解密诊断全靠它)
-                try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
-                    $"[{DateTime.Now:HH:mm:ss.fff}] {obj["log"]}\n"); } catch { }
-                Log($"[JS] {obj["log"]}");
+                // ★ 2026-09-04 发布清理: 解密诊断多为逐帧高频且会镜像双写, 默认不再落盘。
+                //   需离线诊断时设环境变量 CCTV_VERBOSE_JS=1 恢复全量。
+                var jsMsg = Convert.ToString(obj["log"]) ?? "";
+                if (jsMsg.Length > 0 && (_verboseJsLogs || !IsJsNoise(jsMsg)))
+                    Log($"[JS] {jsMsg}");
                 return;
             }
             if (obj?["err"] != null)
@@ -273,6 +292,8 @@ public partial class MainWindow : Window
         ChannelList.SelectedIndex = 0;
         OfficialWebView.Visibility = Visibility.Visible;
         StartProxy();
+        // ★ 启动后异步预热 CDN/API 域名连接 (代理 /warm), 加快后续首次/换台请求
+        _ = WarmProxyAsync();
         // ★ 阻止 Windows 屏保/休眠 (媒体播放器标准行为)
         SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
         Log("就绪 — 双击频道播放");
@@ -341,6 +362,27 @@ public partial class MainWindow : Window
          //   Log("Go 代理已启动 (Chrome TLS 指纹)");
         }
         catch (Exception ex) { Log($"Go 代理启动失败: {ex.Message}"); }
+    }
+
+    // ★ 启动后异步预热 CDN/API 域名 (代理 /warm): DNS + TLS 握手并留空闲连接,
+    //   加快后续首次请求 / 换台 (2026-09-04, 仅预热不缓存内容)。
+    async Task WarmProxyAsync()
+    {
+        try
+        {
+            using var hc = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            for (int i = 0; i < 50; i++)   // 等代理就绪 (~最长 15s)
+            {
+                try
+                {
+                    var txt = await hc.GetStringAsync("http://127.0.0.1:18888/warm");
+                    Log("[warm] " + (txt.Length > 260 ? txt.Substring(0, 260) : txt).Replace("\n", " | "));
+                    return;
+                }
+                catch { await Task.Delay(300); }
+            }
+        }
+        catch (Exception ex) { Log($"[warm] 预热失败: {ex.Message}"); }
     }
 
     async void PlayChannel(string chName)
@@ -738,16 +780,28 @@ public partial class MainWindow : Window
     {
         _epgTimer?.Dispose();
         _scrollTimer?.Stop();
-        // 每 30 秒刷新一次节目信息
+        _epgCache = new List<EpgProgram>();
+        _lastEpgFetch = DateTime.MinValue;
+        // ★ 2026-09-04: 修复"长时间播放跨节目单不更新"——
+        //   每 10s 用本地时钟按缓存推进"正在/即将"(跨节目单 ≤10s 内切换);
+        //   拉取仅 ≥60s 一次(降低 capi 频率与失败影响); 拉取失败/为空则沿用缓存。
         _epgTimer = new System.Threading.Timer(async _ =>
         {
             try
             {
-                var programs = await FetchEpgAsync(pid);
-                _ = Dispatcher.BeginInvoke(new Action(() => UpdateProgramDisplay(programs)));
+                if ((DateTime.Now - _lastEpgFetch).TotalSeconds >= 60)
+                {
+                    _lastEpgFetch = DateTime.Now;
+                    var programs = await FetchEpgAsync(pid);
+                    if (programs != null && programs.Count > 0)
+                    {
+                        _epgCache = programs;
+                    }
+                }
             }
-            catch { }
-        }, null, 1000, 30000);
+            catch { /* 拉取失败: 沿用缓存, 界面仍按本地时钟推进 */ }
+            _ = Dispatcher.BeginInvoke(new Action(() => UpdateProgramDisplay(_epgCache)));
+        }, null, 0, 10000);
         // 独立的滚动定时器: 每 150ms 滚 1px
         _scrollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         _scrollTimer.Tick += (_, _) => ScrollNextProg();

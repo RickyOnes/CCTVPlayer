@@ -57,6 +57,15 @@ interface EpgItem {
   day?: number;         // 0=今天, 1=明天（跨天节目单标注）
 }
 
+/** EPG 心跳缓存条目（绝对分钟，跨天 +1440；供 10s 本地时钟推进） */
+interface EpgAbs {
+  name: string;
+  start: string;
+  absStart: number;
+  absEnd: number;
+  day: number;          // 0=今天 1=明天
+}
+
 /** 鉴权链 sign 结果（ArkTS 不支持未类型化对象字面量） */
 interface SignResult {
   input: string;
@@ -535,6 +544,11 @@ struct Index {
   private lastAddressRefreshMs: number = 0;
   private kvTimer: number = -1;
   private warmTimer: number = -1;         // ★ 预热周期心跳定时器
+  // ★ EPG 心跳 (2026-09-04 对齐桌面版): 10s 本地时钟推进 + 缓存兜底 + ≥60s 才网络刷新
+  private epgTickTimer: number = -1;
+  private epgLastFetchMs: number = 0;
+  private epgRawCache: EpgAbs[] = [];
+  private epgCachePid: string = '';
   private noticeTimer: number = -1;       // ★ 视频区友好提示自动消失计时器(5s)
   private currentPid: string = '';
   private currentCnlId: string = '';
@@ -875,6 +889,10 @@ struct Index {
     if (this.warmTimer >= 0) {
       clearInterval(this.warmTimer);
       this.warmTimer = -1;
+    }
+    if (this.epgTickTimer >= 0) {   // ★ EPG 心跳
+      clearInterval(this.epgTickTimer);
+      this.epgTickTimer = -1;
     }
     if (this.launcher) {
       this.launcher.stopWatch();
@@ -1567,6 +1585,10 @@ struct Index {
       this.loading = true;
       this.startKv(ch.pid, live.playUrl);
       // ★ 后台静默拉 EPG：更新节目条 + 下方"当前+未来8小时"节目单（不弹窗，单请求）
+      //   2026-09-04: 预置缓存 pid 并启动心跳 → 即使首次拉取失败也会在下一 tick(10s) 自动补拉。
+      this.epgCachePid = ch.pid;
+      this.epgLastFetchMs = 0;
+      this.startEpgTick();
       this.fetchUpcomingEpg(ch.pid);
     } catch (e) {
       if (requestId !== this.playRequestId) {
@@ -1791,6 +1813,11 @@ struct Index {
         if (e <= s) e += 24 * 60;
         all.push({ name, start, absStart: s + 24 * 60, absEnd: e + 24 * 60, isCurrent: false, day: 1 });
       }
+      // ★ 2026-09-04: 缓存全量(今天+明天)绝对分钟数据 → EPG 心跳本地推进用;
+      //   心跳每 ≥60s 才重新网络拉一次, 拉取失败也沿用缓存推进跨节目。
+      this.epgRawCache = all;
+      this.epgCachePid = pid;
+      this.epgLastFetchMs = Date.now();
       // 筛选：正在播放 或 未来 8 小时内开始
       const picked = all.filter((it) => {
         if (it.absStart <= nowMin && nowMin < it.absEnd) return true;         // 正在播放
@@ -1822,6 +1849,75 @@ struct Index {
       }
     } catch (e) {
       console.info('[cctv] 未来节目单拉取失败: ' + (e as Error).message);
+    }
+  }
+
+  // ==================== EPG 心跳 (2026-09-04 对齐桌面版) ====================
+  /** 启动心跳（幂等）：10s 本地时钟推进跨节目；≥60s 才网络刷新一次 */
+  private startEpgTick(): void {
+    if (this.epgTickTimer >= 0) {
+      return;
+    }
+    this.epgTickTimer = setInterval(() => {
+      this.epgTick();
+    }, 10000);
+    console.info('[epg] EPG 心跳已启动 (10s 本地推进 / 60s 网络刷新)');
+  }
+
+  private epgTick(): void {
+    try {
+      const d = new Date();
+      const nowMin = d.getHours() * 60 + d.getMinutes();
+      if (this.bgSince > 0) {
+        // 后台不发起网络刷新, 仅本地推进（回前台会立即对齐）
+        this.applyEpgCache(nowMin);
+        return;
+      }
+      if (this.epgCachePid && (Date.now() - this.epgLastFetchMs) >= 60000) {
+        // 到点刷新（含跨天换日期场景）; 失败则由 cache 兜底并在下个 60s 重试
+        this.fetchUpcomingEpg(this.epgCachePid).catch(() => { });
+        return;
+      }
+      this.applyEpgCache(nowMin);
+    } catch (e) {
+      console.error('[epg] 心跳异常: ' + (e as Error).message);
+    }
+  }
+
+  /** 用本地时钟按缓存(绝对分钟)推进"正在播放 + 未来8小时"视图与当前节目条 */
+  private applyEpgCache(nowMin: number): void {
+    const all = this.epgRawCache;
+    if (all.length === 0) {
+      return;
+    }
+    const horizonMin = nowMin + 8 * 60;
+    const picked: EpgAbs[] = [];
+    for (const it of all) {
+      if (it.absStart <= nowMin && nowMin < it.absEnd) {
+        picked.push(it);                       // 正在播放
+      } else if (it.absStart >= nowMin && it.absStart < horizonMin) {
+        picked.push(it);                       // 未来 8h 内开始
+      }
+    }
+    picked.sort((a, b) => a.absStart - b.absStart);
+    const items: EpgItem[] = [];
+    for (const it of picked) {
+      if (it.absStart <= nowMin && nowMin < it.absEnd) {
+        items.push({ name: it.name, start: it.start, end: '', isCurrent: true, day: it.day });
+      } else if (it.absStart >= nowMin && it.absStart < horizonMin) {
+        items.push({ name: it.name, start: it.start, end: '', isCurrent: false, day: it.day });
+      }
+    }
+    // 仅在内容变化时赋值, 减少不必要的 UI 刷新
+    const newCur = items.find((it) => it.isCurrent);
+    const curName = newCur ? newCur.name : (items.length > 0 ? items[0].name : '');
+    if (this.currentEpg !== curName) {
+      this.currentEpg = curName;
+    }
+    const changed = items.length !== this.upcomingEpg.length ||
+      items.some((v, i) => (this.upcomingEpg[i] ? this.upcomingEpg[i].name !== v.name : true));
+    if (changed) {
+      this.upcomingEpg = items;
     }
   }
 
