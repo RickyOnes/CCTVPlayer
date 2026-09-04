@@ -17,21 +17,12 @@ namespace CCTVPlayer;
 
 public partial class MainWindow : Window
 {
-    WasmSigner? _signer;
     CctvChannel? _current;
     bool _fullscreen;
     bool _webViewReady;
     CoreWebView2Environment? _webViewEnv;
     // ★ 单文件发布下, AppDir 指向临时解压目录(无伴生文件). 改用 exe 真实所在目录.
     static readonly string AppDir = System.IO.Path.GetDirectoryName(Environment.ProcessPath)!;
-    // ★ 2026-09-04 发布清理: 解密诊断日志逐帧高频, 默认不落盘; 离线诊断设 CCTV_VERBOSE_JS=1 恢复全量
-    static readonly bool _verboseJsLogs = string.Equals(
-        Environment.GetEnvironmentVariable("CCTV_VERBOSE_JS"), "1", StringComparison.Ordinal);
-    static readonly string[] JsNoisePrefixes =
-    {
-        "[WARM]", "[DISP]", "[UPDB]", "[JSDEB]", "[CMGDEC", "[KTBL]",
-        "[EVAL", "[LOC-SPOOF]", "[MTID]", "[KEYSCAN]", "[REPLAY]", "[INIT="
-    };
     Rect _normalRect;
     Rect _fsRestoreRect;      // ★ 全屏专用: 退出全屏时的位置大小 (不与 BtnMaxRestore 的 _normalRect 混淆)
     WindowState _fsRestoreState;  // ★ 全屏专用: 退出全屏时的窗口状态
@@ -51,6 +42,15 @@ public partial class MainWindow : Window
     // ★ EPG 缓存 + 心跳刷新 (2026-09-04): 拉取失败也能用本地时钟推进"正在/即将"
     List<EpgProgram> _epgCache = new List<EpgProgram>();
     DateTime _lastEpgFetch = DateTime.MinValue;
+
+    // ★★ 调试日志总开关 (2026-09-04)
+    //   false(发布) = 屏蔽全部调试日志:
+    //     · 不再写 cctv-debug.log / cctv-proxy.log
+    //     · 不再接收并转发页面的 {log}/{err} 诊断消息(含 Go 代理注入的 CMG 探针), 在 JSON 解析前直接丢弃
+    //     · 状态栏只保留用户可见提示, 即 Log(msg, userFacing: true) 的那些调用
+    //   true(排查) = 恢复旧行为(全量落盘 + 状态栏精简过滤)。
+    //   ★ 用 static readonly 而非 const, 避免 DEBUG_LOG=false 时编译期产生"无法访问的代码"警告。
+    static readonly bool DEBUG_LOG = false;
 
     // ★ seqid 持久化: 对齐浏览器, 计数器存于本地文件, 跨运行单调递增, 永不复用旧值。
     //   浏览器把 nseqId 存在 cookie/localStorage, 删 cookie 才归 1; 服务器据此校验 seqid 不回退, 复用旧值 → 20401。
@@ -78,7 +78,15 @@ public partial class MainWindow : Window
             using var fs = new System.IO.FileStream(iconPath, System.IO.FileMode.Open, System.IO.FileAccess.Read);
             var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(fs,
                 System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-            TitleIcon.Source = decoder.Frames[0];
+            // ★ 标题栏 24x24: 取最合适的一帧(ICO 内含 16~256 共 7 帧, Frames[0] 是最小的 16x16)
+            //   优先选 >=32 的最小帧, 没有就用最大的一帧, 缩放时最清晰。
+            var frames = decoder.Frames;
+            var iconFrame = frames.FirstOrDefault(f => f.PixelWidth >= 32)
+                            ?? frames.OrderByDescending(f => f.PixelWidth).FirstOrDefault();
+            TitleIcon.Source = iconFrame;
+            // ★ 任务栏 / Alt-Tab 图标: WindowStyle=None 时不会走系统标题栏,
+            //   Window.Icon 决定任务栏按钮图标(与 exe 嵌入图标一致)。
+            Icon = iconFrame;
         }
         RefreshChannelList();
         InitializeWebView();
@@ -168,7 +176,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Log($"WebView2 初始化失败: {ex.Message}");
+            Log($"WebView2 初始化失败: {ex.Message}", true);
             _webViewReady = false;
         }
     }
@@ -225,32 +233,31 @@ public partial class MainWindow : Window
         }
     }
 
-    static bool IsJsNoise(string m)
-    {
-        foreach (var p in JsNoisePrefixes)
-            if (m.StartsWith(p, StringComparison.Ordinal)) return true;
-        return false;
-    }
-
     void HandleWebMessage(string json)
     {
+        // ★ 调试日志关闭时: 在 JSON 解析之前直接丢弃页面诊断消息(零开销, 播放期每秒可达数十条)
+        if (!DEBUG_LOG && json.Length > 6 &&
+            (json.StartsWith("{\"log\"", StringComparison.Ordinal) || json.StartsWith("{\"err\"", StringComparison.Ordinal)))
+            return;
+
         System.Text.Json.Nodes.JsonNode? obj = null;
         try
         {
             obj = System.Text.Json.Nodes.JsonNode.Parse(json);
             if (obj?["log"] != null)
             {
-                // ★ 2026-09-04 发布清理: 解密诊断多为逐帧高频且会镜像双写, 默认不再落盘。
-                //   需离线诊断时设环境变量 CCTV_VERBOSE_JS=1 恢复全量。
-                var jsMsg = Convert.ToString(obj["log"]) ?? "";
-                if (jsMsg.Length > 0 && (_verboseJsLogs || !IsJsNoise(jsMsg)))
-                    Log($"[JS] {jsMsg}");
+                // ★ 联调: JS 日志落盘 (CMGDEC/CMG/FIX-PB/ slim 等解密诊断全靠它)
+                if (DEBUG_LOG)
+                    try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
+                        $"[{DateTime.Now:HH:mm:ss.fff}] {obj["log"]}\n"); } catch { }
+                Log($"[JS] {obj["log"]}");
                 return;
             }
             if (obj?["err"] != null)
             {
-                try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
-                    $"[{DateTime.Now:HH:mm:ss.fff}] [ERR] {obj["err"]}\n"); } catch { }
+                if (DEBUG_LOG)
+                    try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
+                        $"[{DateTime.Now:HH:mm:ss.fff}] [ERR] {obj["err"]}\n"); } catch { }
                 Log($"[JS-ERR] {obj["err"]}");
                 return;
             }
@@ -287,7 +294,6 @@ public partial class MainWindow : Window
 
     void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        _signer = new WasmSigner();
         RefreshChannelList();
         ChannelList.SelectedIndex = 0;
         OfficialWebView.Visibility = Visibility.Visible;
@@ -296,7 +302,9 @@ public partial class MainWindow : Window
         _ = WarmProxyAsync();
         // ★ 阻止 Windows 屏保/休眠 (媒体播放器标准行为)
         SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
-        Log("就绪 — 双击频道播放");
+        // ★ 启动时就把 player.served.html 准备好, 换台时直接导航(旧逻辑每次换台重建一次 1.5MB 文件)
+        EnsureServedHtml();
+        Log("就绪 — 双击频道播放", true);
     }
 
     void CopyDirectory(string src, string dst)
@@ -316,7 +324,7 @@ public partial class MainWindow : Window
             var proxyPath = System.IO.Path.Combine(AppDir, "cctv-proxy.exe");
             if (!File.Exists(proxyPath))
                 proxyPath = System.IO.Path.Combine(AppContext.BaseDirectory, "cctv-proxy.exe");
-            if (!File.Exists(proxyPath)) { Log($"cctv-proxy.exe 未找到: {proxyPath}"); return; }
+            if (!File.Exists(proxyPath)) { Log($"cctv-proxy.exe 未找到: {proxyPath}", true); return; }
 
             // ★ 确保 sapi_cache 在 cctv-proxy.exe 旁边 (单文件发布 .NET 会把 cctv-proxy.exe 解压到 temp, 但 sapi_cache 不会)
             var proxyDir = System.IO.Path.GetDirectoryName(proxyPath)!;
@@ -348,12 +356,12 @@ public partial class MainWindow : Window
             };
             _proxyProcess.OutputDataReceived += (s, e) =>
             {
-                if (!string.IsNullOrEmpty(e.Data))
+                if (DEBUG_LOG && !string.IsNullOrEmpty(e.Data))
                     File.AppendAllText(System.IO.Path.Combine(proxyDir, "cctv-proxy.log"), $"[{DateTime.Now:HH:mm:ss}] {e.Data}\n");
             };
             _proxyProcess.ErrorDataReceived += (s, e) =>
             {
-                if (!string.IsNullOrEmpty(e.Data))
+                if (DEBUG_LOG && !string.IsNullOrEmpty(e.Data))
                     File.AppendAllText(System.IO.Path.Combine(proxyDir, "cctv-proxy.log"), $"[{DateTime.Now:HH:mm:ss}] ERR {e.Data}\n");
             };
             _proxyProcess.Start();
@@ -361,7 +369,7 @@ public partial class MainWindow : Window
             _proxyProcess.BeginErrorReadLine();
          //   Log("Go 代理已启动 (Chrome TLS 指纹)");
         }
-        catch (Exception ex) { Log($"Go 代理启动失败: {ex.Message}"); }
+        catch (Exception ex) { Log($"Go 代理启动失败: {ex.Message}", true); }
     }
 
     // ★ 启动后异步预热 CDN/API 域名 (代理 /warm): DNS + TLS 握手并留空闲连接,
@@ -392,9 +400,63 @@ public partial class MainWindow : Window
         await PlayOfficialAsync(chName);
     }
 
+    // ★ player.served.html 构建结果缓存 (进程内只构建一次)
+    bool _servedHtmlReady;
+
+    // ★ 生成(或复用) player.served.html = player.html + 三个注入资产(base64 内联)。
+    //   旧逻辑: 每次换台都重建一遍 (读 44KB + 3 次 base64 编码≈1.1MB + 写 1.5MB) —— 换台卡顿的主因之一。
+    //   新逻辑: 进程内只构建一次; 若磁盘已有 served html 且不比 player.html 旧, 直接复用。
+    //   ★ 因此发布包可以只带预生成的 player.served.html, 不必带 player.html / keygen_bg.wasm /
+    //     ts_module_body.js / RJq7sO71JF.wasm (它们只在"重建"时才需要)。
+    void EnsureServedHtml()
+    {
+        if (_servedHtmlReady) return;
+        var servedPath = System.IO.Path.Combine(AppDir, "player.served.html");
+        var htmlPath = System.IO.Path.Combine(AppDir, "player.html");
+        var wasmPath = System.IO.Path.Combine(AppDir, "keygen_bg.wasm");
+        var ckeyPath = System.IO.Path.Combine(AppDir, "ts_module_body.js");
+        var yspPath = System.IO.Path.Combine(AppDir, "RJq7sO71JF.wasm");
+
+        bool haveHtml = File.Exists(htmlPath);
+        bool canBuild = haveHtml && File.Exists(wasmPath) && File.Exists(ckeyPath) && File.Exists(yspPath);
+
+        if (File.Exists(servedPath))
+        {
+            // ★ 发布包场景: 无源文件, 或 served 已不比 player.html 旧 → 直接复用, 不重建
+            if (!canBuild || File.GetLastWriteTimeUtc(htmlPath) <= File.GetLastWriteTimeUtc(servedPath))
+            {
+                _servedHtmlReady = true;
+                return;
+            }
+        }
+        if (!haveHtml) { Log("player.html 缺失", true); return; }
+        if (!canBuild)
+        {
+            Log("player.served.html 缺失且无法重建(注入资产不全)", true);
+            return;
+        }
+
+        try
+        {
+            string html = File.ReadAllText(htmlPath, System.Text.Encoding.UTF8);
+            // ★ keygen_bg.wasm: 页内 get_signature / get_token_rnd (openapi 签名链)
+            html = html.Replace("<!-- WASM_BASE64 -->",
+                $"<script>window.__wasmBase64='{Convert.ToBase64String(File.ReadAllBytes(wasmPath))}'</script>");
+            // ★ ts_module_body.js: 官方 chunk-vendors 模块 fb15, cKey 动态生成核心
+            html = html.Replace("<!-- CKEY_CORE -->",
+                $"<script>window.__ckeyCoreB64='{Convert.ToBase64String(File.ReadAllBytes(ckeyPath))}'</script>");
+            // ★ RJq7sO71JF.wasm: 页内 window.__genYspTicket 复刻官方 _c, 浏览器原生 V8, 零网络依赖
+            html = html.Replace("<!-- YSPTICKET_WASM -->",
+                $"<script>window.__yspTicketWasmB64='{Convert.ToBase64String(File.ReadAllBytes(yspPath))}'</script>");
+            File.WriteAllText(servedPath, html, System.Text.Encoding.UTF8);
+            _servedHtmlReady = true;
+        }
+        catch (Exception ex) { Log($"player.served.html 生成失败: {ex.Message}", true); }
+    }
+
     async Task PlayOfficialAsync(string chName)
     {
-        if (!_webViewReady) { Log("WebView2 未就绪"); return; }
+        if (!_webViewReady) { Log("WebView2 未就绪", true); return; }
 
 		//StatusText.Text = $"{chName} [官方源]";
         NowPlaying.Text = chName;
@@ -420,45 +482,8 @@ public partial class MainWindow : Window
 
         try
         {
-            var htmlPath = System.IO.Path.Combine(AppDir, "player.html");
-            var wasmPath = System.IO.Path.Combine(AppDir, "keygen_bg.wasm");
-            if (!File.Exists(htmlPath)) { Log("player.html 缺失"); return; }
-
-            // ★ 把 keygen_bg.wasm 嵌入 HTML, 零网络依赖
-            string html = File.ReadAllText(htmlPath, System.Text.Encoding.UTF8);
-            if (File.Exists(wasmPath))
-            {
-                var wasmB64 = Convert.ToBase64String(File.ReadAllBytes(wasmPath));
-                html = html.Replace("<!-- WASM_BASE64 -->", $"<script>window.__wasmBase64='{wasmB64}'</script>");
-               // Log($"wasm {wasmB64.Length/1024}KB 已嵌入 HTML");
-            }
-            // ★ 把 cKey 生成器的 CORE (官方 chunk-vendors 模块 fb15) 以 base64 注入,
-            //   player.html 内的 shim 会用 env-stub 环境执行它, 复刻浏览器 cKey。
-            var ckeyPath = System.IO.Path.Combine(AppDir, "ts_module_body.js");
-            if (File.Exists(ckeyPath))
-            {
-                var ckeyB64 = Convert.ToBase64String(File.ReadAllBytes(ckeyPath));
-                html = html.Replace("<!-- CKEY_CORE -->", $"<script>window.__ckeyCoreB64='{ckeyB64}'</script>");
-                //Log($"cKey core {ckeyB64.Length/1024}KB 已嵌入 HTML");
-            }
-            else { Log("ts_module_body.js 缺失, cKey 无法动态生成"); }
-
-            // ★ 把 RJq7sO71JF.wasm 以 base64 注入, 供 player.html 的 window.__genYspTicket 用浏览器原生 V8 复刻官方 _c。
-            //   与 cKey 同一套零网络依赖方案; 不再依赖 Node / 外部 PATH。详见白皮书 V3.0 的 yspticket 攻破记录。
-            var yspWasmPath = System.IO.Path.Combine(AppDir, "RJq7sO71JF.wasm");
-            if (File.Exists(yspWasmPath))
-            {
-                var yspB64 = Convert.ToBase64String(File.ReadAllBytes(yspWasmPath));
-                html = html.Replace("<!-- YSPTICKET_WASM -->", $"<script>window.__yspTicketWasmB64='{yspB64}'</script>");
-               // Log($"yspticket wasm {yspB64.Length / 1024}KB 已嵌入 HTML");
-            }
-            else { Log("RJq7sO71JF.wasm 缺失, yspticket 无法动态生成"); }
-
-            // ★ 把注入后的 HTML 写到本地文件, 由代理同源托管 (http://127.0.0.1:18888/player),
-            //   这样 CMG 脚本 / 媒体分片都走同源, 规避 file:// 的 CORS / PNA 限制与 CDN TLS 指纹问题。
-            var servedPath = System.IO.Path.Combine(AppDir, "player.served.html");
-            File.WriteAllText(servedPath, html, System.Text.Encoding.UTF8);
-            //Log($"player.served.html 已写入 ({html.Length}b), 导航到代理 /player");
+            EnsureServedHtml();
+            if (!_servedHtmlReady) return;
 
             var navTcs = new TaskCompletionSource<bool>();
             void OnNav(object? s, CoreWebView2NavigationCompletedEventArgs e)
@@ -480,7 +505,7 @@ public partial class MainWindow : Window
                                 || rch.Contains(c.Name, StringComparison.OrdinalIgnoreCase));
                             await FetchViaPostMessage(rc);
                         }
-                        catch (Exception ex) { Log($"[HLS-FATAL] 恢复失败: {ex.Message}"); }
+                        catch (Exception ex) { Log($"[HLS-FATAL] 恢复失败: {ex.Message}", true); }
                     });
                 }
             }
@@ -510,7 +535,7 @@ public partial class MainWindow : Window
             //StatusText.Text = $"{chName} [CMG]";
             await FetchViaPostMessage(cctvCh);
         }
-        catch (Exception ex) { Log($"错误: {ex.Message}"); }
+        catch (Exception ex) { Log($"错误: {ex.Message}", true); }
     }
 
     // ===== 动态生成 cKey (替换原先硬编码的 CctvApiClient.LiveCKey) =====
@@ -611,7 +636,7 @@ public partial class MainWindow : Window
         var authText = await authResp.Content.ReadAsStringAsync();
         if ((int)authResp.StatusCode != 200) { Log($"auth HTTP {authResp.StatusCode}: {authText[..Math.Min(100, authText.Length)]}"); return; }
         var token = System.Text.Json.Nodes.JsonNode.Parse(authText)?["data"]?["token"]?.ToString();
-        if (token == null) { Log("无token"); return; }
+        if (token == null) { Log("无token", true); return; }
         // ★ auth 响应里的 data.ts (秒) 是官方 _c 的第2参数, 同时作为 wasm _time/PCG 尾缀种子
         var authTs = System.Text.Json.Nodes.JsonNode.Parse(authText)?["data"]?["ts"]?.ToString()
                      ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
@@ -650,7 +675,7 @@ public partial class MainWindow : Window
             else { Log("get_token_rnd 超时/失败, 无法获取 sessionToken"); }
         }
         catch (Exception ex) { Log($"open/token 异常: {ex.Message}"); }
-        if (string.IsNullOrEmpty(sessionToken)) { Log("sessionToken 获取失败, 终止本次播放"); return; }
+        if (string.IsNullOrEmpty(sessionToken)) { Log("sessionToken 获取失败, 终止本次播放", true); return; }
        // Log($"sessionToken 获取成功: {sessionToken[..Math.Min(12, sessionToken.Length)]}...");
 
         // ★★★ 重试: live 偶发 20401(获取直播信息失败 / 防盗链cKey校验失败 error 85),
@@ -746,7 +771,7 @@ public partial class MainWindow : Window
             if (string.IsNullOrEmpty(m)) { Log($"无m3u8 (尝试{attempt}): {lrText[..Math.Min(160, lrText.Length)]}"); continue; }
             m3u8 = m;
         }
-        if (m3u8 == null) { Log("live 尝试失败 (未获取到m3u8)"); return; }
+        if (m3u8 == null) { Log("live 尝试失败 (未获取到m3u8)", true); return; }
         //Log("m3u8获取成功");
         var esc = m3u8.Replace("\\", "\\\\").Replace("'", "\\'");
         await OfficialWebView.CoreWebView2.ExecuteScriptAsync($"window.__startM3u8('{esc}')");
@@ -1307,12 +1332,15 @@ public partial class MainWindow : Window
         try { await OfficialWebView.CoreWebView2.ExecuteScriptAsync($"v.volume={VolSlider.Value / 100:0.00};"); } catch { }
     }
 
-    void Log(string msg)
+    void Log(string msg, bool userFacing = false)
     {
         // ★ 联调 (2026-09-01): 所有 C# 日志镜像落盘到 cctv-debug.log（[JS] 消息已由 HandleWebMessage 落盘）
         //   状态栏仍保持精简, 但文件里保留全量链路, 便于离线诊断。
-        try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
-            $"[{DateTime.Now:HH:mm:ss.fff}] [CS] {msg}\n"); } catch { }
+        if (DEBUG_LOG)
+            try { File.AppendAllText(System.IO.Path.Combine(AppDir, "cctv-debug.log"),
+                $"[{DateTime.Now:HH:mm:ss.fff}] [CS] {msg}\n"); } catch { }
+        // ★ 调试日志关闭时: 只放行用户可见提示, 其余诊断消息全部丢弃
+        if (!DEBUG_LOG && !userFacing) return;
         // ★ 状态精简: 只显示关键信息；静默掉过于频繁的 diagnostic 消息
         if (msg.Contains("auth签名") || msg.Contains("MEDIA") || msg.Contains("wasm")
             || msg.Contains("cKey") || msg.Contains("yspticket") || msg.Contains("player.served")
@@ -1326,7 +1354,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        _loadCts?.Cancel(); _signer?.Dispose();
+        _loadCts?.Cancel();
         try { _proxyProcess?.Kill(); _proxyProcess?.Dispose(); } catch { }
         base.OnClosed(e);
     }

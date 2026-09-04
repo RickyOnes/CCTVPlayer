@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="utf-8">
+<script>
+/* ★★ 调试日志总开关 (2026-09-04)
+   false = 屏蔽本页所有诊断日志([EVAL]/[LOC-SPOOF]/[slim]/[INITDB]/[UPDB]/[JSDEB]/[KTBL]/[MTID]/[bg] 等),
+           并停用仅供诊断的 hook(InitPlayer/UpdatePlayer/jsdecLive8 的 dump + 重放、wasm 内存密钥表扫描)。
+           仅 {err}/{error} 类真实故障仍上报(数量极少)。
+   排查时改为 true 即可全量恢复(改 CCTVPlayer/player.html 并复制到运行目录后重启生效)。 */
+window.__CCTV_DEBUG__ = false;
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;background:#000;overflow:hidden}
@@ -41,7 +49,7 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
   window.eval = function(s){
     // ★ 诊断: 记录 wasm .eval 的所有表达式(含非 location), 上限 300 条 (已静默)
     if (typeof s === 'string') {
-      try { if (_na < 300) { _na++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-ALL] '+s.substring(0,140)}); } } catch(e){}
+      try { if (window.__CCTV_DEBUG__ && _na < 300) { _na++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-ALL] '+s.substring(0,140)}); } } catch(e){}
     }
     if (typeof s === 'string' && /location/.test(s)) {
       try {
@@ -49,18 +57,18 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
         var fn = new Function('self','window','document','location','navigator','return (' + s + ');');
         var r = fn({location:fakeLoc}, {location:fakeLoc}, {location:fakeLoc}, fakeLoc, {});
         if (typeof r === 'string') {
-          if (_n < 80) { _n++; try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF] '+s.substring(0,90)+' -> '+r}); } catch(e){} }
+          if (window.__CCTV_DEBUG__ && _n < 80) { _n++; try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF] '+s.substring(0,90)+' -> '+r}); } catch(e){} }
           return r;
         }
         // 非字符串结果: 强行用伪 location 重新拼一个字符串返回, 避免退回真实 eval 泄露 127.0.0.1
-        try { var r2 = String(r); if (_n < 80) { _n++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF-nonstr] '+s.substring(0,90)+' -> '+r2}); } return r2; } catch(e3){}
+        try { var r2 = String(r); if (window.__CCTV_DEBUG__ && _n < 80) { _n++; if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL-SPOOF-nonstr] '+s.substring(0,90)+' -> '+r2}); } return r2; } catch(e3){}
       } catch(e) {
         try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({err:'[EVAL] 复合求值失败: '+s.substring(0,80)+' :: '+e.message}); } catch(e2){}
       }
     }
     return _eval.call(this, s);
   };
-  try { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL] 域名锁 eval 劫持(鲁棒版)已安装'}); } catch(e){}
+  try { if (window.__CCTV_DEBUG__ && window.chrome && window.chrome.webview) window.chrome.webview.postMessage({log:'[EVAL] 域名锁 eval 劫持(鲁棒版)已安装'}); } catch(e){}
 })();
 </script>
 
@@ -116,7 +124,7 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
   // 5) 生效验证: 必须回读确认 self.location.href 真的变成 FAKE, 不再假成功
   var nowHref=(self.location&&self.location.href)||'(null)';
   var verified=(nowHref===FAKE_HREF);
-  if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[LOC-SPOOF] steps=['+steps.join(',')+'] verified='+verified+' now='+nowHref});
+  if(window.__CCTV_DEBUG__&&window.chrome&&window.chrome.webview) window.chrome.webview.postMessage({log:'[LOC-SPOOF] steps=['+steps.join(',')+'] verified='+verified+' now='+nowHref});
 })();
 </script>
 
@@ -172,7 +180,7 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
 <script>
 (function(){
   var BASE='/sapi/assets/2025/wasm/';
-  function post(m){ try{ if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage(m); }catch(e){} }
+  function post(m){ try{ if(!window.__CCTV_DEBUG__ && m && 'log' in m) return; if(window.chrome&&window.chrome.webview) window.chrome.webview.postMessage(m); }catch(e){} }
   function boot(){
     if (typeof CMGDecModule === 'undefined') { post({err:'[slim] CMGDecModule 未定义'}); return; }
     try {
@@ -194,7 +202,8 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
         } catch(e){ __ebOk='ERR '+e.message; }
         post({log:'[slim] wasm 就绪 eb_prog='+((globalThis.__CMG_EB_RAW__&&globalThis.__CMG_EB_RAW__.length)||0)+'B reloc='+((globalThis.__CMG_EB_RELOC__&&globalThis.__CMG_EB_RELOC__.length)||0)+'项 ebHead='+__ebOk+(__ebOk==='MISMATCH'?('('+__head+')'):'')});
 
-        // ★ 联调: hook InitPlayer, dump 返回的内部状态指针内容
+        // ★ 联调: hook InitPlayer, dump 返回的内部状态指针内容 (仅 __CCTV_DEBUG__=true 时启用)
+        if (window.__CCTV_DEBUG__) {
         try {
           var __mod4=window.CNTVH5PlayerModule;
           var __oi=__mod4._CMG_InitPlayer;
@@ -264,6 +273,7 @@ video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
             post({log:'[JSDEB] hook 已安装'});
           }
         } catch(e){ post({log:'[JSDEB-ERR] '+e.message}); }
+        }
       };
     } catch(e) { post({err:'[slim] CMG 实例化失败: '+e.message}); }
   }
@@ -543,7 +553,7 @@ window.__startM3u8 = function(url) {
             //if(d.fatal) show('错误:'+d.type+'/'+d.details+extra);
             //else show('非致命:'+d.type+'/'+d.details+extra);  // ★ 调试期恢复显示非致命错误
         });
-        hls.on(Hls.Events.MANIFEST_PARSED,function(ev,data){
+        if (window.__CCTV_DEBUG__) hls.on(Hls.Events.MANIFEST_PARSED,function(ev,data){
           try{
             var mt=hls.config&&hls.config.mediaTagId;
             var lv=(data&&data.levels&&data.levels[0])||{};
@@ -553,7 +563,7 @@ window.__startM3u8 = function(url) {
         });
         hls.attachMedia(v); hls.loadSource(url);
         show('CMG解密中...');
-        installKeyTableProbe(mod);
+        if (window.__CCTV_DEBUG__) installKeyTableProbe(mod);
     }
     // ★ 复刻官方时序: 等 wasm 解密模块就绪后再 loadSource, 否则首片 demux 时 wasm 未编译会失败
     if (mod.ready && typeof mod.ready.then === 'function') {
@@ -571,7 +581,7 @@ window.__goBackground = function(){
   window.__bgPaused = true;
   try{ if(hls && hls.stopLoad) hls.stopLoad(); }catch(e){}
   try{ if(v && !v.paused) v.pause(); }catch(e){}
-  try{ post({log:'[bg] 已暂停并停止拉流'}); }catch(e){}
+  try{ if(window.__CCTV_DEBUG__) post({log:'[bg] 已暂停并停止拉流'}); }catch(e){}
   return true;
 };
 window.__goForeground = function(){
@@ -584,7 +594,7 @@ window.__goForeground = function(){
       if (p && p.catch) p.catch(function(){ v.muted = true; var p2 = v.play(); if(p2&&p2.catch)p2.catch(function(){}); });
     }
   }catch(e){}
-  try{ post({log:'[bg] 已恢复拉流'}); }catch(e){}
+  try{ if(window.__CCTV_DEBUG__) post({log:'[bg] 已恢复拉流'}); }catch(e){}
   return true;
 };
 </script>

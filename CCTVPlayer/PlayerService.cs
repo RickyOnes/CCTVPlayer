@@ -277,6 +277,14 @@ public class CctvApiClient
         // try { File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "cctv-debug.log"), $"[{DateTime.Now:HH:mm:ss.fff}] [API] {msg}\n"); } catch { }
     }
 
+#if LEGACY_WASMTIME
+    // ★★ 遗留路径 (无调用点, 保留供分析/回溯):
+    //   C# 侧用 Wasmtime 跑 keygen_bg.wasm 做 get_token_rnd / get_signature, 全程走 HTTP。
+    //   现役路径是 MainWindow.FetchViaPostMessage() —— 签名改由页面内 keygen_bg.wasm 完成(见 player.html),
+    //   因此 Wasmtime 包 + WasmSigner 已从工程中移除(省 ~9.3MB 发布体积)。
+    //   需要恢复: csproj 加回 <PackageReference Include="Wasmtime" Version="20.0.2" />、
+    //   加 <DefineConstants>$(DefineConstants);LEGACY_WASMTIME</DefineConstants>,
+    //   并把 legacy/WasmSigner.cs 移回项目根目录。
     public async Task<string?> FetchM3u8UrlAsync(WasmSigner signer, CctvChannel ch)
     {
         DebugLog($"=== 开始获取 {ch.Name} (pid={ch.Pid}, cnlid={ch.CnlId}) ===");
@@ -400,6 +408,7 @@ public class CctvApiClient
         var ext = jn?["data"]?["extended_param"]?.ToString() ?? "";
         return vurl != null ? vurl + ext : null;
     }
+#endif // LEGACY_WASMTIME
 
     async Task<(int status, string? body)> GetOpenToken(string url)
     {

@@ -25,7 +25,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
-    <PackageReference Include="Wasmtime" Version="20.0.2" />
+    <!-- Wasmtime 已移除: WasmSigner (C# 侧签名) 是死代码, 签名早已全部由页面内 keygen_bg.wasm 完成。
+         该包会带进 wasmtime.dll(8.73MB) + Wasmtime.Dotnet.dll(614KB)。源码保留在 legacy/WasmSigner.cs。 -->
+  </ItemGroup>
+
+  <!-- legacy/: 仅供分析/回溯的历史代码, 不参与编译 -->
+  <ItemGroup>
+    <Compile Remove="legacy/**" />
+    <None Include="legacy/**" />
   </ItemGroup>
 
   <!-- 伴生文件（调试和发布都复制） -->
@@ -37,27 +44,30 @@
     <Content Include="ts_module_body.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="gen_yspticket.cjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     
-    <!-- ★ 使用宏明确路径 ★ -->
+    <!-- ★ 使用宏明确路径 ★ cctv-proxy.exe: 调试输出需要; 发布由 publish.ps1 单独复制, 不进 publish 目录 -->
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\cctv-proxy.exe"
             CopyToOutputDirectory="PreserveNewest"
-            CopyToPublishDirectory="Always"
+            CopyToPublishDirectory="Never"
             Link="cctv-proxy.exe" />
-    
-    <!-- 代理缓存文件（可选） -->
-    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_cmg.worker.js"
+
+    <!-- ★ 代理缓存: 播放必需的四件套 (slim 解密三件套 + 官方 hls.cmg.js)。
+         cmg.worker.js(1.30MB) 已由 slim 取代、页面从不请求, 不再随行。
+         注意: slim 三件套是本地生成产物(rev/gen_slim.cjs), 上游不存在, 代理缓存未命中会 404。 -->
+    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_cmg.slim.js"
             CopyToOutputDirectory="PreserveNewest"
-            CopyToPublishDirectory="Always"
-            Link="sapi_cache\assets_2025_wasm_cmg.worker.js" />
+            CopyToPublishDirectory="Never"
+            Link="sapi_cache\assets_2025_wasm_cmg.slim.js" />
+    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_eb_prog.bin"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="Never"
+            Link="sapi_cache\assets_2025_wasm_eb_prog.bin" />
+    <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_reloc_table.bin"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="Never"
+            Link="sapi_cache\assets_2025_wasm_reloc_table.bin" />
     <Content Include="$(MSBuildProjectDirectory)\..\cctv-proxy\sapi_cache\assets_2025_wasm_hls.cmg.js"
             CopyToOutputDirectory="PreserveNewest"
-            CopyToPublishDirectory="Always"
+            CopyToPublishDirectory="Never"
             Link="sapi_cache\assets_2025_wasm_hls.cmg.js" />
   </ItemGroup>
-
-  <!-- 如果上述方式仍不工作，可用此后备 -->
-  <Target Name="CopyProxyAfterPublish" AfterTargets="Publish" Condition="!Exists('$(PublishDir)\cctv-proxy.exe')">
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\cctv-proxy\cctv-proxy.exe"
-          DestinationFolder="$(PublishDir)"
-          SkipUnchangedFiles="true" />
-  </Target>
 </Project>

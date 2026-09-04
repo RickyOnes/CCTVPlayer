@@ -1,0 +1,44 @@
+d:\TV\CCTV\
+├── CCTVPlayer\                    ★ 桌面端（WPF + WebView2），当前交付主线
+│   ├── MainWindow.xaml(.cs)       UI 壳 + 调度中枢：导航模式、cKey/yspticket/签名链、
+│   │                              EPG 心跳、前后台、EPG 右键菜单、DEBUG_LOG 开关
+│   ├── player.html                ★ 唯一前端入口：WEVAL 域名劫持 + 网络拦截
+│   │                              + slim 解密三件套引导 + 三大种子补丁 + cKey/yspticket shim
+│   ├── PlayerService.cs           55 条频道表(权威源=鸿蒙 ChannelList.ets) + API 封装
+│   │                              + EPG protobuf 解析 + 遗留 HTTP 链路(#if LEGACY_WASMTIME)
+│   ├── App.xaml.cs                全局异常 → cctv-crash.log
+│   ├── legacy/WasmSigner.cs       留档：C# 侧 Wasmtime 签名实现（不再编译）
+│   ├── publish.ps1                ★ 发布：生成 served html → 8 文件 → zip
+│   └── 注入资产（构建期用，不进发布包）
+│       ├── keygen_bg.wasm         27KB  get_signature / get_token_rnd（openapi 签名）
+│       ├── RJq7sO71JF.wasm       950KB  官方 _c → yspticket（AES-CTR + PCG）
+│       ├── ts_module_body.js     105KB  官方 chunk-vendors 模块 fb15 → cKey
+│       └── gen_yspticket.cjs     3.5KB  Node 版 yspticket（仅遗留路径用）
+│
+├── cctv-proxy\                    Go 反代（桌面专用；鸿蒙端用 ArkTS 本地服务替代）
+│   ├── main.go                    /player /sapi(缓存+注入) /media /capi /warm
+│   │                              + 注入 CMG 诊断探针、VMPATCH3、CMGPlayer.json 直供
+│   ├── build.ps1                  verify_inject → go build → 覆盖 bin 的 exe
+│   ├── verify_inject.cjs          注入串语法校验（改注入必跑）
+│   └── sapi_cache\                5 件：slim.js + eb_prog.bin + reloc_table.bin（本地生成★）
+│                                  + hls.cmg.js（官方）+ cmg.worker.js（已废弃，仅留档）
+│
+├── CctvPoC\                       鸿蒙端（ArkTS + ArkWeb），entry/src/main/ets/pages/Index.ets
+├── rev\                           逆向工具链（~80 脚本）：gen_slim / gen_hm_inline /
+│                                  ab_test / node_ref / verify_dec / derive_reloc … + 结论 md
+├── 根目录反编译产物                cmg.wasm/.wat/.c/.h、cmg_decrypt.wasm、
+│                                  keygen.wasm/.wat/.c + disasm/dump
+├── wabt反编译工具\                wasm2wat 等
+├── 央视频官方源文件\              官方 JS/wat/json 原件（比对基准）
+├── 白皮书 + README（中/英）
+└── backup_*\                      三个历史备份（ArkTS 代理 / CctvPoC 干净版 / 源码）
+
+运行期依赖链（桌面）
+CCTVPlayer.exe
+  ├─ 启动 cctv-proxy.exe（同目录）── 读同目录 sapi_cache\ 提供 /sapi 资产与注入
+  ├─ EnsureServedHtml()  → player.served.html（含 keygen_bg / ts_module_body / RJq7sO71JF 的 base64）
+  ├─ WebView2 导航 127.0.0.1:18888/player  → Go 代理返回 served html
+  └─ 页面内依次：cKey(ts_module_body) → auth → yspticket(RJq7sO71JF) → open/token
+                → 签名(keygen_bg get_signature) → get-live-info → m3u8
+                → hls.cmg.js + slim 解密 → MSE 播放
+
