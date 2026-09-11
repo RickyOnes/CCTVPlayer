@@ -21,12 +21,26 @@
 | 必须导航 `yangshipin.cn` | 本地 `127.0.0.1` + **WEVAL（eval hook）** + **emval `origin` Proxy** + 预置**完整** `FAKE_HREF`（43 字符含域名）即可解密 | ❌ **推翻** |
 | `[DISP-INIT] Cannot assign to read only property 'activeURL'` = WebView2 限制 | 是**我们自己的 bug**：`defineProperty` 缺 `writable:true` → 只读 → 抛错被 `catch{}` 吞 → 密钥派生中断 | ❌ **推翻** |
 | eval 域名劫持（theAnswer）"部分通过但**非根因**" | 它恰恰是**正解的一部分**（WEVAL hook） | ❌ **部分推翻** |
-| wasm 只导出 Live 解密路径、**无 VOD/回看解密** | wasm 导出 **`_CMG_jsdecVOD0..8`**（`na..va = func[73..105]`）；`StaticCallModuleVod` 10 个方法、`StaticCallModuleVodMap=[0..6]` 齐全 | ❌ **推翻** |
+| wasm 只导出 Live 解密路径、**无 VOD/回看解密** | wasm 导出 **`_CMG_jsdecVOD0..8`**（`na..va` 映射见下，★ 2026-09-06 勘误：**不是**连续区间 `73..105`）；`StaticCallModuleVod` 10 个方法、`StaticCallModuleVodMap=[0..6]` 齐全 | ❌ **推翻** |
 | 回看做不了是因为"没有 VOD 解密入口" | 回看真正缺的只是**移动端 m3u8 接口**，**不是解密能力** | ❌ **推翻** |
 | 纯 Node 无法解密（"依赖浏览器环境"） | `ab_test.cjs` 实证：官方 `fG` 在 **Node 解密 5/5 成功**；成败差异 = 解密时的 `activeURL`（`jL` 长度） | ❌ **推翻** |
-| 方案 B（wasm2c 原生解密）"死刑 / 被否定" | `run_out27` 决定性实验：**6/6 帧逐字节 == Node 官方输出**；此前"被否定"是 **harness bug 造成的假阴性** | ❌ **推翻** |
+| 方案 B（wasm2c 原生解密）"死刑 / 被否定" | `run_out27` 实验：**6/6 帧逐字节 == Node 官方输出**；此前"被否定"是 **harness bug 造成的假阴性** | ❌ **推翻**（"死刑"确实是假命题）。⚠️ **但 2026-09-11 追加更正**：该"6/6"用百分比判据得出，**需复核**；现行 host 实测**解密 0 字节**。⇒"死刑"已证伪，但"已跑通"**也未成立**，见 §13.1 / §13.2 |
 | 不手动 `createAVSession`，靠 `navigator.mediaSession.metadata` 也能出台标 | 日志 `artwork 已设置` 正常但系统媒体卡**始终无台标** ⇒ **ArkWeb 不把 MediaSession artwork 桥接到系统 AVSession**。2026-09 多轮修改全无效 | ❌ **推翻** |
 | 手动 `createAVSession` 会导致媒体卡片消失（"三次复现"） | 真因是**没 catch `6600101`**（ArkWeb 可能已先创建）；正确处理 6600101 后，**手动 create 是台标的唯一可行方案**（**2026-09-03 真机验证通过：媒体卡台标正常显示**） | ❌ **推翻** |
+
+### ★ 2026-09-06 勘误（事实性笔误订正，**不是**结论推翻）
+
+由 Gate 0 侦察（`code-explorer` 核对 `源文件/cmg_c.c` / `cmg_c.h` / `cmg.wat` 原文）发现并订正：
+
+| 位置 | 旧（误） | 新（正） | 依据 |
+|---|---|---|---|
+| §十 / §4 多处 | `call 21` = import **`env.y`** | = import **`env.z`** | `cmg.wat:40-41`；`cmg_c.c` 访问器 `w2c_env_z` |
+| §〇 / §4.2 / §十六 / 附录B | `na..va = func[73..105]`（**误当作连续区间**） | **非连续**：`na=73, oa=74, pa=75, qa=76, ra=77, sa=78, **ta=104**, ua=79, va=105` | `cmg_c.c` 导出表逐项核对 |
+| §十四 总结 · 第 6 条 | "台标走 `navigator.mediaSession.metadata`，**绝不手动 `createAVSession`**" | 与上表第 8/9 行**自相矛盾**，已改为"必须手动 `createAVSession`" | 2026-09-03 真机验证 |
+| 战役总览 第 8 条 | "台标真凶 = MediaSession metadata **推送时机**" | 台标真凶 = **ArkWeb 不桥接 MediaSession artwork**，与推送时机无关 | 同上 |
+| 附录 A | `d:/TV/CCTV/cmg_c.c` | `d:/TV/CCTV/**源文件**/cmg_c.c`（+ `cmg_c.h`） | 实际路径 |
+
+> ⚠️ **不要误改**：§2.6 中 `keygen_bg.wasm`（module `a`）的 `import d = Emscripten _time`（`Date.now()/1000`）是**另一个模块**的描述，**正确无误**。勘误仅针对 `cmg.wasm`（module `env`）的 import 命名。
 
 ### 战役总览（按攻破顺序）
 
@@ -45,7 +59,7 @@
 7. **★ 第七战役 · 源文件瘦身 slim**（2026-09-01）
    `cmg.worker.js` 1.3MB → `cmg.slim.js` 186KB + `eb_prog.bin` 378KB + `reloc_table.bin` 40KB ≈ **604KB**（见 §十一）。
 8. **★ 第八战役 · 鸿蒙 ArkWeb 落地 + 媒体卡片台标**（2026-09-01 ~ 09-03）
-   `CctvPoC` 真机换台正常；台标真凶 = **MediaSession metadata 推送时机**（见 §十二）。
+   `CctvPoC` 真机换台正常；★ 2026-09-06 更正：台标真凶 **不是** MediaSession metadata 推送时机，而是 **ArkWeb 不把 MediaSession artwork 桥接到系统 AVSession** ⇒ 唯一解 = **手动 `createAVSession` + `setAVMetadata({mediaImage: PixelMap})`**（必须 catch `6600101`，2026-09-03 真机验证通过，见 §12.3）。
 9. **★ 第九战役 · 方案 B（wasm2c 原生解密）可行性判定**（2026-09-02）
    解密核心**已证实可脱离浏览器正确工作**；但整体仍冻结，瓶颈在 AVPlayer 集成侧（见 §十三）。
 
@@ -272,8 +286,17 @@ CMGDEC1#N t=<NALU类型> in=<长度> out=<长度> inh=<前16字节hex> outh=<前
   - 路径2：key = `fG[0x22f]`，ts = `jJ[0xb0b][0x291]`。
 - **`fG[wz(0x909)]` = 控制函数（派发器）**，在 `hls.cmg.js` 里只被调用 3 处：`InitPlayer`(@624643) / `UpdatePlayer`(@210830 每帧) / `UnInitPlayer`(@625107)。它把命令派发到 `CNTVH5PlayerModule.ModuleLive.<方法>`。
 - **wasm 导出（从 `CMGDEC1#1` 模块导出全貌 dump 确认）：**
-  - `ba=func[71]=_CMG_InitPlayer`、`ca=func[254]=_CMG_UnInitPlayer`、`da=func[176]=_CMG_UpdatePlayer`、`ea..ma=func[91..99]=_CMG_jsdecLive0..8`、`na..va=func[73..105]=_CMG_jsdecVOD0..8`。
-- **`func 51`(jsdecLive8 调的 transform) 与 `func 71`(InitPlayer) 都是字节码虚拟机（VM）**：用 `br_table` 做指令分发，从内存缓冲区读「程序」解释执行。恒等 = 该程序读到的**密钥槽空/错**。
+  - `ba=func[71]=_CMG_InitPlayer`、`ca=func[254]=_CMG_UnInitPlayer`、`da=func[176]=_CMG_UpdatePlayer`、`ea..ma=func[91..99]=_CMG_jsdecLive0..8`。
+  - ★ 2026-09-06 勘误 —— `na..va=_CMG_jsdecVOD0..8` **不是连续区间**：实际映射为
+    `na=73, oa=74, pa=75, qa=76, ra=77, sa=78, **ta=104**, ua=79, va=105`
+    （注意 `ta=104` 与 `ua=79` 的顺序**不是**按索引递增排列，旧版简写 `func[73..105]` 会误导）。依据：`源文件/cmg_c.c` 导出表逐项核对。
+- **`func 51` = 字节码虚拟机（VM）解释器**：用 `br_table` 做指令分发，从内存缓冲区读「程序」解释执行。
+  - ★ 2026-09-11 更正（**权威来源** `源文件/cmq.wat` → `D:\TV\CCTV\rev\dist\cmg.wat`）：
+    wat 全文**只有 4 处 `br_table`（行 244 / 2130 / 2157 / 2348），全部位于 `func 51`（行 78..5118）内**
+    ⇒ **`func 71`(`_CMG_InitPlayer`) 不是 `br_table` 解释器，旧版「51 和 71 都是 br_table 解释器」不成立**。
+    `func 71` 体积也很大（~1630 行），更可能是 **wasm 原生实现的控制流平坦化状态机**（未经字节码）。
+  - **操作码表已完整解出**（146 项 `br_table`、105 个已实现），见 **§4.9**。
+  - ⚠️ 旧结论「恒等 = 该程序读到的**密钥槽空/错**」**未被证实**，不要再当作判据（详见 §4.9.3）。
 
 ### 4.3 死路排查（均已实证推翻，记录以防重蹈）
 
@@ -293,7 +316,7 @@ CMGDEC1#N t=<NALU类型> in=<长度> out=<长度> inh=<前16字节hex> outh=<前
 > 下面 §4.4 / §4.5 记载的「`self.location.href` 是 C++ 引擎绑定、JS 层不可改写，因此**只能真实导航官网**」——**这条结论是错的**。
 > 2026-08-31 ~ 09-01 重新逆向后的**正确结论见 §十（第六战役）**。简版：
 >
-> 1. wasm 取 location 的**唯一出口是 `eval()`**：`cmg.wat` 中 `call 21`（= import `env.y` = `_emscripten_asm_const_ii`）**全模块仅 1 处**，在 `func[51]`（VM 解释器）内；`ASM_CONSTS[0]` 即 `theAnswer`，数据段里只有 `self.location.host` / `href` / `protocol` 三个表达式。**`eval` 是普通全局函数，可 hook**（WEVAL）→ 无需真实导航。
+> 1. wasm 取 location 的**唯一出口是 `eval()`**：`cmg.wat` 中 `call 21`（= import **`env.z`** = `_emscripten_asm_const_ii`，★ 2026-09-06 勘误：旧版误写作 `env.y`）**全模块仅 1 处**，在 `func[51]`（VM 解释器）内；`ASM_CONSTS[0]` 即 `theAnswer`，数据段里只有 `self.location.host` / `href` / `protocol` 三个表达式。**`eval` 是普通全局函数，可 hook**（WEVAL）→ 无需真实导航。
 > 2. **真正进入 wasm 内存的种子是 `self.activeURL`**（JS 层普通属性），由 `moduleDecData` 每次解密时把它的 charCodes **追加到 NALU 之后**（长度 `jL` 单独作为第 4 个参数传入）——**不是** `location.href`。
 > 3. **还有第二个泄露点 `self.origin`**：官方 `moduleActive` 的 INITPLAYER 分支第一个取值就是 `self.origin`（优先于 `location.href`），路径是 wasm VM → import `__emval_get_global('origin')` → `globalThis.origin`（真实值）。它**不走 eval**，所以旧 WEVAL hook 的 `/location/` 正则**漏拦**了它。症状特征：**只坏 P/B 帧（t=1），IDR（t=5）正常**。
 > 4. 当年那条 `[DISP-INIT] Cannot assign to read only property 'activeURL'` **不是 WebView2 的限制**，是我们自己的 bug：`Object.defineProperty(window,'activeURL',{value:FAKE_HREF,configurable:true})` **缺 `writable:true`** → 属性变只读 → 赋值抛错 → 被 `catch{}` 吞掉 → 密钥派生中断 → 全帧花屏。
@@ -403,9 +426,78 @@ CMGDEC1#2..40 t=1 (P/B) same=Y                        ← P/B 解密恒等（花
    - **不需要真实导航官网**，详见 §十。
 3. **`catch(jN){}` 静默吞异常是最大干扰**：派发器 InitPlayer 分支体内任何崩溃都被吞掉，导致「InitPlayer 从未真正调用」长期被误判。诊断必须整体 try/catch 暴露真实异常。
 4. **双密钥槽**：IDR 走路径1（`fG[0x9d2]="live"`），P/B 走路径1 或路径2（`fG[0x22f]`），由 `jJ[0x479]` 决定。预热/补解密必须对准正确的槽。
-5. **wasm 是字节码 VM**：`func 51`/`func 71` 是 `br_table` 解释器，恒等 = 密钥槽空；不要试图直接 patch wasm（强制 `global 9=2` 会破坏输出缓冲 → `out=0`）。
+5. **wasm 是字节码 VM**（★ 2026-09-11 更正）：**只有 `func 51` 是 `br_table` 解释器**（wat 全文 4 处 `br_table` 全部位于 `func 51` 体内，见 §4.9）；`func 71` **不是** br_table 解释器。旧结论「恒等 = 密钥槽空」**未获证实**，不要再当判据。**仍然成立**：不要试图直接 patch wasm（强制 `global 9=2` 会破坏输出缓冲 → `out=0`）。
 6. **`pushAccessUnit` 延迟推送**：VideoSample 累积到下一个 GOP 边界才推出，这是 FIX-PB「后续帧回写」能生效的前提。
 7. **首帧 P/B 滞后 1 帧是良性异常**：浏览器 H.264 错误隐藏会掩盖，不导致可见花屏。
+
+---
+
+### 4.9 ★ f51 VM 权威操作码表与「控制流平坦化状态机」（2026-09-11 新增）
+
+> **来源（一手、可复现）**：`D:\TV\CCTV\rev\dist\cmg.wat` 的 **`func 51`（行 78..5118）就是 f51 VM 解释器本体**。
+> 在此之前所有反汇编都基于猜测的指令表，其中**一个致命错误**导致整段字节码错位：
+> `op45..57`（条件跳转 + imm32 绝对目标）**长度是 8 字节**，旧表按 4 字节处理。
+> ⇒ 由此产生的「未解码分支 `op228/op176/op68`」「`op47` 是哈希步」「对 tagId 滚动哈希落默认分支」
+> 等结论**全部作废**（那些字节其实是 `op47` 的 imm32 跳转目标）。**本节为唯一可信版本。**
+
+#### 4.9.1 解释器约定
+```
+local0 = PC（指向当前 4 字节指令字）    local1 = REG（寄存器文件基址）
+local5 = INSTR（u32 LE：[op][b1][b2][b3]）
+local3 = b1   local2 = b2   local4 = b3
+寄存器 lN 是 8 字节(i64)，地址 = REG + (N<<3)
+取指：loop 头先 PC += 4，再 INSTR = [PC]   ⇒ 指令长度 = 4 + 立即数字长
+程序头 4 字节 = [140][narg][framesize_lo][framesize_hi]，被解释器序言吃掉
+               （140 不是操作码；narg 由 CALL 读取目标程序头 byte1 得到）
+eb 装载基址 0x604610；eb_prog.bin 里的跳转目标字段是【未重定位的 eb 偏移】
+```
+
+#### 4.9.2 操作码表（146 项 br_table，105 个已实现；未实现的走 default = 空操作，PC 只 +4）
+| op | 语义 | 长度 |
+|---|---|---|
+| 0 / 1 / 2 | `l[b1]=l[b2]` / `=imm16` / `=IMM32` | 4 / 4 / **8** |
+| 3,4,5,7,9 | add sub mul div_u rem_u | 4 |
+| 11,13,14,15,16,18 | `~` eq ne lt_s lt_u le_u | 4 |
+| 19,20,21,22,24 | and or xor shl shr_u | 4 |
+| 25..43 | 同上，但第二操作数取 `s8(b3)`（`INSTR>>s24`） | 4 |
+| **45..50** | `if !(l[b2] C l[b3]) goto IMM32`（C = eq/ne/lt_s/lt_u/le_s/le_u）——**条件为假才跳** | **8** |
+| **52..57** | `if (l[b2] C l[b3]) goto IMM32` ——**条件为真才跳** | **8** |
+| 58..66, 68..73, 75..79, 86..88, 98, 99, 145 | f64/f32 运算、转换、比较、存取（60/61 = 8，62 = 12） | 4 |
+| **78 / 79** | `l[b1]=s8[l[b2]]` / `u8[l[b2]]`（**真正的 load8**，不是 82/85） | 4 |
+| **82 / 83,84,85** | `l[b1]=u32[l[b2]]` / `u8|u16|u32 @[l[b1]] = l[b2]` | 4 |
+| 90,91,94 / 95,97 | load8/16/32 `[l[b2]+l[b3]]` / store8/32 `[l[b1]+l[b2]]` | 4 |
+| 102..106 / 107..109 | load8/16/32 `[l[b2]+imm8]` / store8/16/32 `[l[b1]+imm8]` | 4 |
+| 116 | `u32@[l[b1]] = u32@[l[b2]]` | 4 |
+| **119 / 120 / 121** | `goto rel` / `if(l[b1]) goto rel` / `if(!l[b1]) goto rel`（rel = `imm16<<2`） | 4 |
+| **125** | `l[b1] = l[b2] ? l[b3] : l[u8[PC+4]]`（三元选择，**决定下一状态**） | 8 |
+| **134** | `CALL IMM32`：目标 `u32@PC+4`，实参寄存器号在 `PC+8`，adv = `4+((narg+7)>>2)<<2` | 变长 |
+| **135** | `CALL indirect`（= **import 调用**，JS 侧 `e/f`(tempRet0) 对的来源） | 8 |
+| 136 / 137 | `l[b1]=g7` / `g7=l[b1]` | 4 |
+| **138** | `SWITCH idx=l[b1]-l[b2], n=l[b3], 跳转表@PC+4` | 8 |
+| **139** | `return l[b1]`（i64：写 `l[b1]` 与 `l[b1]+4`） | 4 |
+
+#### 4.9.3 ★ `jsdecLive8` 顶层程序（eb+232408）= 控制流平坦化状态机
+- 状态变量 = `u32[l13+12]`（l13 = 帧基址；wasm2c host 中 = **`0x461C`**，l13 = `0x4610`），初值 `0x32ac33c5`
+- 派发 = 对状态做**升序二叉搜索**（一串 `if !(state <s 常数) goto`）＋ 末尾 `SWITCH` 精确匹配
+- **共 27 个状态**；`0x9da5ff93` = **退出状态**（块 `eb+232716: goto 235052 → return l21`）
+- wasm2c host 实测（`CMG_WATCH_LO=0x461c`）**只走 17 步**：
+  ```
+  0x32ac33c5→98ef5462→924c40dd→f36733e6→1843f150→13808417→554467a7→25b2d697
+  →7a77ebcc→6af4a844→d2605c88→8e6d67bb→1b281dfb→d385b680→262e7930→68013e71→9da5ff93(退)
+  ```
+- **每块的下一状态都是常量**（`op125` 的三元谓词是 `(0%2==0)|(0<10)`，恒 1）⇒ 这 17 步是**唯一路径**。
+- 顶层真正干活的只有 3 处：
+  `233648 CALL eb+370016 (l0, buf16, 10)` / `233660 CALL indirect` / `233840 CALL eb+36636 narg=6`
+
+> ⚠️ **对交付（桌面 / 鸿蒙）的影响：无。** 两端都走 JS 侧官方 wasm + slim 资产，本节只是把
+> 「wasm 内部到底在干什么」从猜测升级为事实，用于后续排查与方案 B。**不要据此改动播放器代码。**
+
+#### 4.9.4 复用工具（`D:\TV\hmnative\tools\native_dec\`）
+| 工具 | 用途 |
+|---|---|
+| `_f51_sem.cjs [--raw] [op...]` | 从 `cmg.wat` 提取每个操作码的权威语义 + 长度（产物 `_f51_sem.txt`） |
+| `_dis_f51_v2.cjs <起> <止>` | **权威反汇编器**（取代已作废的 `_dis_f51_232408.cjs`） |
+| `_state_blocks.cjs` | 抽「状态 → 块首址」映射（`_state_blocks.json`） |
 
 ---
 
@@ -468,7 +560,7 @@ cd d:/TV/CCTV/cctv-proxy
 | 全帧花屏（有声音无画面） | ★ 2026-09 更正：**不是**导航问题，而是**种子三要素**没对齐（导航官网只是"碰巧"把三要素一次凑齐了） | 依次检查：① `activeURL` 是否**完整 43 字符含域名**（不能是 `replace('yangshipin.cn','')` 后的 30 字符短串）且 `writable:true`；② `self.origin` 的 emval Proxy 是否生效；③ WEVAL(eval) hook 是否命中。见 §十 |
 | **只坏 P/B 帧（t=1）、IDR（t=5）正常** | `self.origin` 经 emval 泄露（**不走 eval**，旧 WEVAL 的 `/location/` 正则漏拦了它） | 上 emval `origin` Proxy（§10.3） |
 | 仅首帧 P/B 花（其余正常） | 密钥槽异步滞后 1 帧（**种子修对后基本消失**） | 先看 `same=N/Y` 比例；>1% 属种子问题而非"良性"，见 §4.8 更正 |
-| `CMGPlayer.json` 404 | ★ 2026-09 更正：它**确实会被 fetch**（浏览器与 wasm2c 原生均已实证）。它是**算法开关表**（VER/RSA/SM2/CRC32/AES/MD5），**不是密钥**；但**缺失时 InitPlayer 会走 decoy 分支**（wasm2c 原生实测：不 fetch → `jsdecLive8` 恒等直通） | 本地直供一份（`__CMGPLAYER_JSON__`，225B）。不要因为它"看起来不像根因"就删掉对应路由 |
+| `CMGPlayer.json` 404 | ★ 2026-09-11 **二次更正**：前半段成立、后半段**不成立**。✅ 成立：它**确实会被 fetch**（浏览器与 wasm2c 均已实证），是**算法开关表**（VER/RSA/SM2/CRC32/AES/MD5），**不是密钥**。❌ 不成立：**「缺失时走 decoy 分支」已证伪** —— Node 官方链路旁路掉 JSON（`dump_node_mem.cjs <tag> nojson`）实测 **diff=1451，与有 JSON 时完全一致**。当初 wasm2c 原生观测到的「不 fetch → 恒等直通」是 **host 本身 0% 解密造成的假象**（见 §4.9.3），不能作为因果证据 | 仍**建议本地直供一份**（`__CMGPLAYER_JSON__`，225B）：它确实会被 fetch，且上游随时可能真的拿它当开关 ⇒ 保留路由是低成本保险。**但不要再向别人解释成「缺了它就走 decoy」** |
 | 30s 后马赛克式花屏 | wasm 内部 ~750 帧计数器（**反篡改自检**，非许可证）无法从 JS 重置 | ★ 已解决：VMPATCH3 内存热修补（见 8.8）。⚠️ 扫描范围 `6684672~6698000` 与 wasm 版本绑定，上游更新（现 `V=1.2.1` / `CMG_BTime=Aug 13 2025`）后需重新确认 |
 | 鸿蒙：切台后黑屏 + `memory access out of bounds` | `__SLIM_WRITE_EB__` 闭包捕获了**第一个**实例的 `HEAPU8/eb`；第二实例把 eb_prog 写进了前一个实例的堆 | slim 改为 `__SLIM_WRITE_EB__(HEAPU8,HEAPU32,ebPtr)` 接收参数，并删除 `__SLIM_DONE__` 防重（见 §11.4） |
 | 鸿蒙：媒体卡片**没有台标** | ★ 2026-09 更正：Web 侧 `navigator.mediaSession.metadata` **从未生效**——日志 `artwork 已设置` 正常但系统媒体卡无台标 ⇒ **ArkWeb 不把 MediaSession artwork 桥接到系统 AVSession**。不是推送时机/尺寸/格式问题 | **唯一可用方案 = 原生手动 `createAVSession` + `setAVMetadata({mediaImage: PixelMap})`**（必须 catch `6600101`；见 §12.3） |
@@ -697,6 +789,9 @@ setInterval(function(){
 2. **性能**：每 2s 扫描 ~384KB 内存，JS 耗时 < 5ms，不影响帧率
 3. **兼容性**：依赖 `HEAPU8`（Emscripten 标准），所有 wasm 运行环境均可用
 4. **局限性**：如果央视频更新 wasm 二进制改变内存布局，需重新确认 snapshot 范围（但 `6684672~6698000` 是 wasm 全局数据段，稳定性高）
+5. **★ 作用域（2026-09-11 明确）**：VMPATCH3 **只适用于 JS 侧运行环境（桌面 WebView2 / 鸿蒙 ArkWeb）**，
+   在两端都是**必须保留**的产品级方案（§8.8.4 实测 30s/40s `same=Y` = 0 帧）。
+   **不要**把它移植到 wasm2c native host——实测表明它会抹掉 UpdatePlayer 成果，且解不了 native 的 0 解密（§13.3 注 4）。
 
 ---
 
@@ -731,7 +826,8 @@ setInterval(function(){
 V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」能work，但代价很大：①必须让 WebView 真的访问官网（**合规/审核风险**）；②官网页面 DOM 随时可能变，脆弱；③鸿蒙端走「官网导航 + 拦截」**冷启动超过官方约 4 秒的启动时长红线**（ArkWeb 本有 `onInterceptRequest` 等**等价拦截机制**，**不是机制缺失**，是启动性能不允许）。所以必须搞清楚"到底是谁在读 location"，把导航官网这个包袱彻底扔掉。
 
 ### 10.2 事实一：wasm 取 location 的唯一出口是 `eval()`，而 `eval` 可 hook
-- `cmg.wat` 中 `call 21`（= import `env.y` = `_emscripten_asm_const_ii`）**全模块仅 1 处**，位于 `func[51]`（VM 解释器）第 2999 行。
+- `cmg.wat` 中 `call 21`（= import **`env.z`** = `_emscripten_asm_const_ii`，★ 2026-09-06 勘误：旧版误写作 `env.y`）**全模块仅 1 处**，位于 `func[51]`（VM 解释器）第 2999 行。
+  - 勘误依据：`源文件/cmg_c.c`（wasm2c 产物）中该 import 对应访问器为 `w2c_env_z`，`cmg.wat:40-41` 亦记为 `env.z`；函数名 `_emscripten_asm_const_ii` 本身无误，错的只是 import 名。
 - `ASM_CONSTS[0]` 即 `theAnswer`：`eval(name)`；数据段里只有 `self.location.host` / `href` / `protocol` 三个表达式。
 - **`eval` 是普通全局函数，可以 hook** → **WEVAL hook**：拦截含 `location` 的 eval 表达式，返回 `yangshipin.cn`。
 - 实测确认：`InitPlayer` 期间**只调用一次** `self.location.host`。
@@ -886,19 +982,49 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
 ## 十三、第九战役：方案 B（wasm2c 原生解密）可行性判定（2026-09-02）
 
 ### 13.1 结论先行
-- **解密核心已证实可以脱离浏览器正确工作。** 此前"方案 B 死刑 / 被否定"是 **harness bug 造成的假阴性**，已证伪，**不要再引用**。
-- **但方案 B 整体仍冻结**（不投入鸿蒙 NDK）。瓶颈**不在解密**，而在 **AVPlayer 集成侧**。
+- ⚠️ **★ 2026-09-11 更正**：下方第 1 条「解密核心已证实可以脱离浏览器正确工作」**需降级为「待复核」**。
+  用可信判据（host 改动字节数）复测，现行 wasm2c host **实际解密 0 字节**（目标 1451）；
+  当年「6/6 逐字节一致 / 96.5%」都是**百分比判据造成的假象**。详见 §13.2 的 2026-09-11 二次更正。
+  **仍然成立**的部分：「纯 Node 必恒等 ⇒ 方案 B 死刑」是**假命题，已证伪**（Node 确实能解密）。
+- **方案 B 整体仍冻结**（不投入鸿蒙 NDK），理由由「瓶颈在 AVPlayer」**追加一条**：
+  **wasm2c 解密链路本身尚未跑通**。桌面 / 鸿蒙交付基线（方案 A：ArkWeb/WebView2 + slim）**不受影响**。
 
 ### 13.2 决定性实验（run_out27）
 - **假阴性根因**：`env.c` 的 `w2c_env_G(emval_as)` 对 `std::string` 错误地返回了 **emval 句柄 #8**，而不是 **wire 指针**（`{u32 len; char data[]}` 缓冲地址）。wasm 拿这个返回值去读 `self.location.host` 做域名校验（`host === "yangshipin.cn"`）：拿到 `#8` 当地址 → 读垃圾 → **域名校验失败** → `InitPlayer` 走 **decoy 分支**（不 fetch `CMGPlayer.json`、`jsdecLive8` 恒等直通）。
 - **修复**：值类型（`std::string`/`bool`/`num`）返回 wire 指针，对象/未定义类型返回句柄。
 - **结果**：`InitPlayer` 正常 `fetch CMGPlayer.json`（`fetch=1`）；**6/6 帧与 Node 官方 `fG` 输出逐字节一致**（自变化 2390/1204/400/384/423/1268，与 Node 差异 = **0**，refDiff 完全吻合）；import 计数对齐（Node `C:3 F:8 w:3 v:1 e:17 f:17 g:1`）。
 
+> **★ 2026-09-09 勘误（复现状态补充，非结论推翻）**：上述「差异=0」是 2026-09-02 晚 `run_out27` 的**历史实测结果，结论本身正确**。但该次输出的原始 `run_out27.txt` 已丢失，且当年用的 `rev/native/cmg_c.c` + `memimpl.o/rtimpl.o`（旧版 wasm-rt）**未入 git 无法找回**。2026-09-09 用找回的 `env.c`/`main.c` + 源文件 `cmg_c.c` 重跑（金标准组合），**已从 0% 恒等推进到 96.5% 解密**，但仍有 **vsRef ≈ 3.6% 残余差异**（每 224 字节 offset 32-39 的 8 字节，确定性、非时间戳）。残余根因正定位到：写 `0x4634 = g7+16`（栈指针，`cmg_c.c:16331`），host `g7=0x4690` vs node `g7=0xF1`，源于 `InitPlayer` 内**反调试哈希循环（var_L0）的路径分叉**。**「差异=0」尚未在现行代码库完整复现**；§13.4「解密核心已证零风险」应理解为「96.5% 已验证 + 3.6% 残余待收尾」。
+
+> ### ⚠️ ★★ 2026-09-11 **二次更正（本节上文「96.5%」是假象，真实是 0%）**
+>
+> 上文「已从 0% 恒等推进到 96.5% 解密」**判据错了，应作废**：CMG 是**选择性加密**——
+> 每 224 字节只改 offset 32-39 这 8 字节（3.57%）。用「vsRef 百分比」评价时，
+> **96.43% 未加密字节天然相同**，于是「完全没解密」也会显示成 96.5% 正确。
+> 改用**唯一可信判据「host 改动字节数」**实测第一帧（len=40641）：
+> **host 改动 = 0 字节，Node 官方改动 = 1451 字节** ⇒ **host 实际解密 0%，不是"解错 8 字节"。**
+>
+> - 同理，`run_out27` 那条「6/6 逐字节 == Node」也**需复核**：若当年同样用百分比/抽样判据，结论不成立；
+>   且该实验依赖的 `rev/native/cmg_c.c` + `memimpl.o/rtimpl.o`（旧 wasm-rt）**未入 git、已删除，不可复现**。
+> - **现行判据（今后一律用这个）**：`host 改动字节数`（目标 1451）、`ma 内 date_now 次数`（目标 186）。**禁用 vsRef 百分比。**
+> - 已排除「密钥槽空/错」（那是测点时机错误）、已排除 VMPATCH3（见 §8.8.6 注 5）。
+>   当前定位：`jsdecLive8` 顶层是**控制流平坦化状态机**（27 态，host 走 17 步，路径唯一、非分歧点），
+>   ⇒ 分歧在**子程序 `eb+370016` / `eb+36636` 内部**（见 §4.9.3）。
+> - **对交付（桌面 / 鸿蒙）无影响**：两端都不用 wasm2c。但 §13.4「解密核心已证零风险」
+>   必须改写为「**JS 链路（方案 A）已验证；wasm2c 链路尚未跑通，方案 B 维持冻结**」。
+
 ### 13.3 剩余 blockers（都在 AVPlayer 侧，与解密无关）
 1. **AVPlayer demux 不可插桩** → HLS/TS → PES → NALU → 解密 → 重喂解码器，**整条链路要自研**（方案 A 由 hls.js + 官方 `hls.cmg.js` **免费**提供）。
 2. **解密输出非定长**（如 `in=32198 → out=32197`、`30874 → 30872`）→ 必须改写 NALU 长度字段并重封装。
 3. **`InitPlayer` 是字节码 VM、递归极深**：Node 默认栈直接溢出，`--stack-size=200000` 跑 30s 仍未结束（anti-tamper）。纯 C 必须处理好线程/栈模型。
-4. **anti-tamper 在 native 没有 VMPATCH3 的对应层**。
+4. **anti-tamper 在 native 没有 VMPATCH3 的对应层**
+   - ★ 2026-09-11 更正：**VMPATCH3 不是解法，别照搬到 native**。三条独立证据：
+     ① 白皮书 §8.8 给出的 3 个块 `0x661160/0x662160/0x663160` 中，后两个在 **host 与 Node 逐字节完全相同**
+       （说明 host 派生出了同样的密钥材料，不是这里出错）；
+     ② 这 3 块是 **UpdatePlayer 阶段**才分配/填充的，按 §8.8「InitPlayer 后 snapshot」的时机 restore
+       **会抹掉 UpdatePlayer 成果**（有害）；
+     ③ 语义不符：VMPATCH3 治 **750 帧后衰减**，而 native 的症状是**第 1 帧就 0 解密**。
+   - ⚠️ **但 JS 侧（桌面 / 鸿蒙）的 VMPATCH3 必须保留** —— 它是产品级实测有效方案（§8.8.4）。本次更正**仅限 native**。
 
 ### 13.4 ★ 可行骨架（若将来要投入）：`OH_AVDataSource`
 - 鸿蒙 **API 20（鸿蒙 6.0）起**，AVCodec Kit 提供 `OH_AVDataSource` 自定义数据源：实现 `readAt` 回调，把**已解密的内存数据**返回给 `AVDemuxer` → `AVCodec` → 渲染。
@@ -927,7 +1053,9 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
    **不再需要真实导航官网**（见 §十）。
 4. **★ 长期纯净播放（VMPATCH3）**：wasm 内存热修补——InitPlayer 完成后 snapshot 初始内存，每 2s 对比并原地写回所有变化字节。计数器永不到 ~750 帧阈值 → **无花屏、无黑屏、无重载**。⚠️ 扫描范围与 wasm 版本绑定，上游更新后需重新确认。
 5. **★ 源文件瘦身（slim）**：`cmg.worker.js` 1.3MB → `cmg.slim.js` 186KB + `eb_prog.bin` 378KB + `reloc_table.bin` 40KB ≈ **604KB**。**官方 `hls.cmg.js`（704KB）必须保留**——替换它的 V2 方案已实证失败（见 §11.3）。
-6. **★ 鸿蒙端（CctvPoC）**：ArkWeb + slim 已落地，真机换台正常；用 **ArktsProxy（纯 ArkTS 本地服务）**替代 Go 子进程（手机不支持 native 子进程）。台标走 `navigator.mediaSession.metadata`，**绝不手动 `createAVSession`**（见 §十二）。
+6. **★ 鸿蒙端（CctvPoC）**：ArkWeb + slim 已落地，真机换台正常；用 **ArktsProxy（纯 ArkTS 本地服务）**替代 Go 子进程（手机不支持 native 子进程）。
+   - ★ 2026-09-06 更正（本节旧文与 §〇 推翻表、§12.3 **自相矛盾**，已订正）：台标**必须手动 `createAVSession`** + `setAVMetadata({mediaImage: PixelMap})`；`navigator.mediaSession.metadata` **从未生效**（ArkWeb 不桥接 artwork 到系统 AVSession）。实现要点：catch `6600101` 跳过、先注册 play/pause 监听再 `activate()`、初始 PAUSE、退出 `deactivate()`+`destroy()`。详见 §12.3。
+   - 另注：`AVSession` 与 `AudioSession` 是**两套东西**——前者只管播控中心展示，**不参与音频焦点**；后者才决定并发策略。手动 createAVSession **不影响音频独占**，当前 AudioSession 恒定 MIX/SHARE。
 7. **kvcollect 遥测**：完整逆向签名算法（MD5+AuthSalt），C# 每 60s 发送心跳，维持遥测活性。
 8. **整体无需加载官网页面**，体验与原生播放器**完全一致**（无任何间断）。
 
@@ -942,7 +1070,7 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
 | **第五战役** | **30s 后花屏（终极）** | **VMPATCH3 内存热修补** | ✅ **完美** |
 | **第六战役** | **必须导航官网** | **eval hook + activeURL + emval origin Proxy** | ✅ **已推翻旧结论** |
 | **第七战役** | **源文件 1.3MB 臃肿** | **slim 外链（604KB）** | ✅（V2 再瘦身 **失败已放弃**） |
-| **第八战役** | **鸿蒙落地 + 媒体卡台标** | **ArkWeb + slim + ArktsProxy；台标 = 修正 metadata 推送时机** | ✅ 落地 / 台标**在修** |
+| **第八战役** | **鸿蒙落地 + 媒体卡台标** | **ArkWeb + slim + ArktsProxy；台标 = 手动 `createAVSession` + `mediaImage: PixelMap`**（2026-09-03 真机验证通过） | ✅ **全部完成** |
 | **第九战役** | **方案 B 原生解密可行性** | **wasm2c 解密核心已证可行**（6/6 逐字节一致） | ✅ 解密可行 / ⏸ **整体冻结**（瓶颈在 AVPlayer demux） |
 
 ---
@@ -983,7 +1111,7 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
 > 本节**推翻**旧结论「wasm 只导出 Live 解密路径、没有 VOD 解密入口」。
 
 ### 16.1 VOD 解密路径**完整存在**
-- wasm **导出 `_CMG_jsdecVOD0..8`**（`na..va = func[73..105]`），与 Live 侧一一对应。
+- wasm **导出 `_CMG_jsdecVOD0..8`**（★ 2026-09-06 勘误：映射为 `na=73, oa=74, pa=75, qa=76, ra=77, sa=78, ta=104, ua=79, va=105`，**非连续区间**），与 Live 侧一一对应。
 - `fG.StaticCallModuleVod` 有 **10 个方法**、`StaticCallModuleVodMap = [0..6]`、`StaticCallModuleVodAPI` 存在。
 - `moduleDecData(jC, jD, jE, jF)` 的第 4 个参数 `jF` 本就是 **`'live' | 'vod'`** —— **调用方天然支持两种模式**。
 - 槽位映射也是一致的：功能名索引 8 = `MpegAudio` → `_CMG_jsdecLive8` / `_CMG_jsdecVOD8`。
@@ -1019,14 +1147,16 @@ V5.0 的结论「`location.href` 是 C++ 绑定 → 只能真实导航官网」�
 - `d:/TV/CCTV/rev/gen_slim.cjs` —— 生成 `cmg.slim.js`（**eval hook / emval origin Proxy / eb_prog 外置**都在这里）
 - `d:/TV/CCTV/rev/gen_hm_inline.cjs` —— 把 slim + 资产内联进鸿蒙 `player.html`（**强制替换旧内联块**）
 - `d:/TV/CCTV/CctvPoC/entry/src/main/ets/pages/Index.ets` —— 鸿蒙主页面，**改 `player.html` 必须 `PLAYER_DEPLOY_VER` +1**
-- `d:/TV/CCTV/cmg_c.c` + `wasm-rt.h` —— **wasm2c 原生解密移植**（方案 B 核心，`emval_as` 已修，见 §13.2）
+- `d:/TV/CCTV/源文件/cmg_c.c` + `cmg_c.h` + `wasm-rt.h` —— **wasm2c 原生解密移植**（方案 B / 方案 C 核心，`emval_as` 已修，见 §13.2）
+  - ★ 2026-09-06 勘误：旧版写作 `d:/TV/CCTV/cmg_c.c`，实际在 `源文件/` 目录下。
+  - ★ 2026-09-06 补充（Gate 0 侦察）：该 wasm2c 产物**没有** `__ATINIT__` / `initRuntime` / `main` / `callMain`，`wasm2c_cmg_instantiate()` 一把梭完成全部初始化；`wasm2c_cmg_free()` 是**空实现**（memory/table 所有权在 host）；线性内存是 **import**（`min=256 页 / max=1536 页 / 64KB 页`），由 host 分配；`struct w2c_env` **只有前向声明**，需自行定义并实现全部 `w2c_env_*` 访问器。
 - 反编译：`cmg.wat` / `cmg_decrypt.wasm`；wabt：`wabt反编译工具/bin/wat2wasm.exe`
 - 官方源：`央视频官方源文件/hls.cmg.js`、`cmg.worker.js`、`CMGPlayer.json`
 
 ### 附录 B：密钥槽 / 调用点速查
 - 解密调用点：`hls.cmg.js` idx≈210867，`fG[wz(0x6bf)](module, ts, nalu, key)`。
 - 控制函数：`fG[wz(0x909)]`（InitPlayer/UpdatePlayer/UnInitPlayer 派发）。
-- wasm 导出：`ba=_CMG_InitPlayer`(func71)、`ca=_CMG_UnInitPlayer`(func254)、`da=_CMG_UpdatePlayer`(func176)、`ea..ma=_CMG_jsdecLive0..8`(func91..99)、**`na..va=_CMG_jsdecVOD0..8`(func73..105)**。
+- wasm 导出：`ba=_CMG_InitPlayer`(func71)、`ca=_CMG_UnInitPlayer`(func254)、`da=_CMG_UpdatePlayer`(func176)、`ea..ma=_CMG_jsdecLive0..8`(func91..99)、**`na..va=_CMG_jsdecVOD0..8`**（★ 2026-09-06 勘误：= `na73, oa74, pa75, qa76, ra77, sa78, ta104, ua79, va105`，**非连续**）。
   - ★ 2026-09 更正：**VOD 导出确实存在**（旧附录漏记，并由此误导出"没有回看解密能力"的错误结论，见 §十六）。
 - 双密钥槽：路径1 `fG[0x9d2]="live"`(key_index 43, IDR/SPS) / 路径2 `fG[0x22f]`(P/B)。
 - `mediaTagId` = `Date.now()` 时间戳（由 hls.js 从 config 填，非 m3u8 来）。
